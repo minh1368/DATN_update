@@ -2,7 +2,6 @@ from pydantic import BaseModel
 
 class PaymentCreate(BaseModel):
     contract_id: int
-    amount: float
     method: str
 
 class PaymentResponse(BaseModel):

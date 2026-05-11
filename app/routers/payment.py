@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.dependencies import get_db
+from app.dependencies import get_db, require_staff_or_admin
 from app.models.payment import Payment
 from app.models.contract import Contract
 from app.schemas.payment import PaymentCreate, PaymentResponse
@@ -11,30 +11,29 @@ router = APIRouter(prefix="/payments", tags=["Payments"])
 
 # GET payments
 @router.get("/", response_model=List[PaymentResponse])
-def get_payments(db: Session = Depends(get_db)):
+def get_payments(db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
     return db.query(Payment).all()
 
 # CREATE payment
-@router.post("/")
-def create_payment(data: PaymentCreate, db: Session = Depends(get_db)):
+@router.post("/", response_model=PaymentResponse)
+def create_payment(data: PaymentCreate, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
 
     contract = db.query(Contract).filter(
         Contract.contract_id == data.contract_id
     ).first()
 
     if not contract:
-        raise HTTPException(404, "Contract không tồn tại")
+        raise HTTPException(status_code=404, detail="Contract không tồn tại")
 
     if contract.status != "approved":
-        raise HTTPException(400, "Contract chưa được duyệt")
+        raise HTTPException(status_code=400, detail="Contract chưa được duyệt")
 
-    # check đã có payment chưa
     existing = db.query(Payment).filter(
         Payment.contract_id == data.contract_id
     ).first()
 
     if existing:
-        raise HTTPException(400, "Đã tồn tại payment")
+        raise HTTPException(status_code=400, detail="Đã tồn tại payment")
 
     payment = Payment(
         contract_id=data.contract_id,
@@ -51,7 +50,7 @@ def create_payment(data: PaymentCreate, db: Session = Depends(get_db)):
 
 # PAY (update status)
 @router.put("/{payment_id}/pay")
-def pay(payment_id: int, db: Session = Depends(get_db)):
+def pay(payment_id: int, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
 
     payment = db.query(Payment).filter(
         Payment.payment_id == payment_id

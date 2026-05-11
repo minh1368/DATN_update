@@ -12,6 +12,7 @@ class ContractResponse(BaseModel):
     start_date: date
     end_date: date
     total_price: float
+    status: str
 
     class Config:
         from_attributes = True

@@ -2,20 +2,50 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.dependencies import get_db
+from app.dependencies import get_db, require_staff_or_admin
 from app.models.rental_request import RentalRequest
+from app.models.car import Car
 from app.schemas.rental_request import RentalRequestCreate, RentalRequestResponse
 
 router = APIRouter(prefix="/rental_requests", tags=["Rental Requests"])
 
 # GET all requests
 @router.get("/", response_model=List[RentalRequestResponse])
-def get_requests(db: Session = Depends(get_db)):
+def get_requests(db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
     return db.query(RentalRequest).all()
 
-# POST create request
+# POST create request (admin/staff)
 @router.post("/", response_model=RentalRequestResponse)
-def create_request(req: RentalRequestCreate, db: Session = Depends(get_db)):
+def create_request(req: RentalRequestCreate, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
+    car = db.query(Car).filter(Car.car_id == req.car_id).first()
+    if not car:
+        raise HTTPException(status_code=404, detail="Xe không tồn tại")
+
+    if car.status != "available":
+        raise HTTPException(status_code=400, detail="Xe hiện không khả dụng")
+
+    if req.start_date >= req.end_date:
+        raise HTTPException(status_code=400, detail="Ngày bắt đầu phải trước ngày kết thúc")
+
+    new_req = RentalRequest(**req.dict())
+    db.add(new_req)
+    db.commit()
+    db.refresh(new_req)
+    return new_req
+
+# POST create request (customer)
+@router.post("/customer", response_model=RentalRequestResponse)
+def create_customer_request(req: RentalRequestCreate, db: Session = Depends(get_db)):
+    car = db.query(Car).filter(Car.car_id == req.car_id).first()
+    if not car:
+        raise HTTPException(status_code=404, detail="Xe không tồn tại")
+
+    if car.status != "available":
+        raise HTTPException(status_code=400, detail="Xe hiện không khả dụng")
+
+    if req.start_date >= req.end_date:
+        raise HTTPException(status_code=400, detail="Ngày bắt đầu phải trước ngày kết thúc")
+
     new_req = RentalRequest(**req.dict())
     db.add(new_req)
     db.commit()
@@ -24,7 +54,7 @@ def create_request(req: RentalRequestCreate, db: Session = Depends(get_db)):
 
 # PUT approve request
 @router.put("/{request_id}/approve")
-def approve_request(request_id: int, db: Session = Depends(get_db)):
+def approve_request(request_id: int, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
     req = db.query(RentalRequest).filter(RentalRequest.request_id == request_id).first()
     
     if not req:
@@ -37,7 +67,7 @@ def approve_request(request_id: int, db: Session = Depends(get_db)):
 
 # PUT reject request
 @router.put("/{request_id}/reject")
-def reject_request(request_id: int, db: Session = Depends(get_db)):
+def reject_request(request_id: int, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
     req = db.query(RentalRequest).filter(RentalRequest.request_id == request_id).first()
     
     if not req:

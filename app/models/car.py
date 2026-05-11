@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric
+from sqlalchemy import Column, Integer, String, Float, Numeric
 from app.database import Base
 
 class Car(Base):
@@ -10,8 +10,8 @@ class Car(Base):
     license_plate = Column(String)
     price_per_day = Column(Numeric)
     status = Column(String)
-
-        # ===== thêm chi tiết =====
+    
+    # ===== thêm chi tiết =====
     color = Column(String)
     seats = Column(Integer)
     fuel_type = Column(String)   # xăng/dầu/điện
