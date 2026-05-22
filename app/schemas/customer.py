@@ -4,6 +4,7 @@ class CustomerCreate(BaseModel):
     name: str
     phone: str
     email: str | None = None
+    password: str | None = None
     address: str | None = None
 
 class CustomerResponse(CustomerCreate):

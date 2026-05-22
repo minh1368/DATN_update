@@ -1,6 +1,38 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../App.css";
+import { notifyUser } from "../lib/toast.js";
+
+const authStorage = window.sessionStorage;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+function getStoredRole() {
+  const fromStorage = authStorage.getItem("userRole");
+  if (fromStorage) return fromStorage;
+  try {
+    const user = JSON.parse(authStorage.getItem("userData") || "{}");
+    return user.role || "customer";
+  } catch {
+    return "customer";
+  }
+}
+
+function buildCustomerHeaders(includeJson = false) {
+  const role = getStoredRole();
+  const headers = {};
+  if (includeJson) headers["Content-Type"] = "application/json";
+  if (role === "admin" || role === "staff") {
+    headers["X-User-Role"] = role;
+  }
+  return headers;
+}
+
+function getCustomerUpdateUrl(customerId) {
+  const role = getStoredRole();
+  const base = `${API_BASE_URL}/customers/${customerId}`;
+  if (role === "admin" || role === "staff") return base;
+  return `${base}/profile`;
+}
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -15,50 +47,120 @@ export default function ProfilePage() {
     address: ''
   });
 
+  const mergeCustomerProfile = (customer) => {
+    const profile = {
+      name: customer.name || '',
+      phone: customer.phone || '',
+      email: customer.email || '',
+      address: customer.address || ''
+    };
+
+    setEditData(profile);
+    setUserData((current) => {
+      const merged = { ...(current || {}), ...customer };
+      authStorage.setItem("userData", JSON.stringify(merged));
+      return merged;
+    });
+    if (customer.customer_id) {
+      authStorage.setItem("customerId", String(customer.customer_id));
+    }
+  };
+
   useEffect(() => {
-    // Lấy dữ liệu người dùng từ localStorage
-    const savedUserData = localStorage.getItem('userData');
+    const savedUserData = authStorage.getItem('userData');
     if (savedUserData) {
       try {
         const user = JSON.parse(savedUserData);
-        setUserData(user);
+        const normalizedUser = {
+          ...user,
+          email: user.email || (user.username?.includes("@") ? user.username : ""),
+        };
+        setUserData(normalizedUser);
         setEditData({
-          name: user.name || '',
-          phone: user.phone || '',
-          email: user.email || '',
-          address: user.address || ''
+          name: normalizedUser.name || '',
+          phone: normalizedUser.phone || '',
+          email: normalizedUser.email || '',
+          address: normalizedUser.address || ''
         });
       } catch (error) {
         console.error('Error parsing user data:', error);
       }
     }
-    
-    // Lấy lịch sử dụng thuê xe
-    fetchUserRentals();
-    
-    setLoading(false);
+
+    loadProfileData();
   }, []);
 
-  const fetchUserRentals = async () => {
-    try {
-      const savedUserData = localStorage.getItem('userData');
-      if (savedUserData) {
-        const user = JSON.parse(savedUserData);
-        
-        // Lấy rental requests của user này
-        const response = await fetch('http://localhost:8000/rental_requests', {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Role': 'customer'
-          }
-        });
-        
-        if (response.ok) {
-          const rentals = await response.json();
-          // Lọc rental requests của user hiện tại (nếu có customer_id)
-          setUserRentals(rentals.slice(0, 10)); // Giới hạn 10最近
-        }
+  const loadProfileData = async () => {
+    const storedCustomerId = authStorage.getItem('customerId');
+    const savedUserData = JSON.parse(authStorage.getItem('userData') || "{}");
+    const userEmail = savedUserData.email || savedUserData.username;
+    let customerId = storedCustomerId;
+
+    if (customerId) {
+      const customer = await fetchCustomerProfile(customerId, false);
+      if (!customer || (userEmail?.includes("@") && customer.email !== userEmail)) {
+        authStorage.removeItem('customerId');
+        customerId = null;
+      } else {
+        mergeCustomerProfile(customer);
       }
+    }
+
+    if (!customerId) {
+      if (userEmail?.includes("@")) {
+        const customer = await fetchCustomerByEmail(userEmail);
+        customerId = customer?.customer_id ? String(customer.customer_id) : null;
+      }
+    }
+
+    await fetchUserRentals(customerId);
+    setLoading(false);
+  };
+
+  const fetchCustomerByEmail = async (email) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/customers/by-email/${encodeURIComponent(email)}`);
+      if (!response.ok) return null;
+      const customer = await response.json();
+      mergeCustomerProfile(customer);
+      return customer;
+    } catch (error) {
+      console.error('Error fetching customer by email:', error);
+      return null;
+    }
+  };
+
+  const fetchCustomerProfile = async (customerId, shouldMerge = true) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/customers/${customerId}`);
+      if (!response.ok) {
+        throw new Error('Không thể tải thông tin khách hàng');
+      }
+      const customer = await response.json();
+      if (shouldMerge) {
+        mergeCustomerProfile(customer);
+      }
+      return customer;
+    } catch (error) {
+      console.error('Error fetching customer profile:', error);
+      return null;
+    }
+  };
+
+  const fetchUserRentals = async (customerId = authStorage.getItem('customerId')) => {
+    try {
+      if (!customerId) {
+        setUserRentals([]);
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/rental_requests/customer/${customerId}`);
+      if (!response.ok) {
+        throw new Error('Không thể tải lịch sử thuê xe');
+      }
+
+      const rentals = await response.json();
+      setUserRentals(Array.isArray(rentals) ? rentals.slice(0, 10) : []);
     } catch (error) {
       console.error('Error fetching user rentals:', error);
     }
@@ -66,35 +168,70 @@ export default function ProfilePage() {
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
-    
+
     try {
-      // Ở đây bạn có thể gọi API để cập nhật thông tin user
-      // Hiện tại chỉ cập nhật localStorage
-      const updatedUser = {
-        ...userData,
-        ...editData
-      };
-      
-      localStorage.setItem('userData', JSON.stringify(updatedUser));
-      setUserData(updatedUser);
+      const storedCustomerId = authStorage.getItem('customerId');
+      if (!storedCustomerId) {
+        const response = await fetch(`${API_BASE_URL}/customers/public`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(editData),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          throw new Error(errorData?.detail || 'Tạo thông tin khách hàng thất bại');
+        }
+
+        const createdCustomer = await response.json();
+        mergeCustomerProfile(createdCustomer);
+        setEditMode(false);
+        notifyUser("Cập nhật thông tin thành công!", "success");
+        return;
+      }
+
+      const response = await fetch(getCustomerUpdateUrl(storedCustomerId), {
+        method: "PUT",
+        headers: buildCustomerHeaders(true),
+        body: JSON.stringify(editData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.detail || 'Cập nhật thông tin thất bại');
+      }
+
+      const updatedCustomer = await response.json();
+      setEditData({
+        name: updatedCustomer.name || '',
+        phone: updatedCustomer.phone || '',
+        email: updatedCustomer.email || '',
+        address: updatedCustomer.address || ''
+      });
+      const merged = { ...userData, ...updatedCustomer };
+      setUserData(merged);
+      authStorage.setItem("userData", JSON.stringify(merged));
       setEditMode(false);
-      
-      alert('Cập nhật thông tin thành công!');
+      notifyUser("Cập nhật thông tin thành công!", "success");
     } catch (error) {
       console.error('Error updating profile:', error);
-      alert('Cập nhật thông tin thất bại. Vui lòng thử lại.');
+      notifyUser(error.message || 'Cập nhật thông tin thất bại. Vui lòng thử lại.', "error");
     }
   };
 
-  const handleCancelEdit = () => {
+  const handleCancelEdit = async () => {
     setEditMode(false);
-    // Reset về dữ liệu cũ
+    const storedCustomerId = authStorage.getItem("customerId");
+    if (storedCustomerId) {
+      await fetchCustomerProfile(storedCustomerId);
+      return;
+    }
     if (userData) {
       setEditData({
-        name: userData.name || '',
-        phone: userData.phone || '',
-        email: userData.email || '',
-        address: userData.address || ''
+        name: userData.name || "",
+        phone: userData.phone || "",
+        email: userData.email || "",
+        address: userData.address || "",
       });
     }
   };
@@ -151,7 +288,7 @@ export default function ProfilePage() {
                 <span>👤</span>
               </div>
               <div className="profile-info">
-                <h1>{userData.username}</h1>
+                <h1>{userData.name || userData.username}</h1>
                 <p className="profile-role">
                   Vai trò: {userData.role === 'admin' ? 'Quản trị viên' : 
                            userData.role === 'staff' ? 'Nhân viên' : 'Khách hàng'}

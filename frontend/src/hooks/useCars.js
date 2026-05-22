@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { fallbackCars } from "../lib/carData.js";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
 export function useCars({ role = "customer" } = {}) {
   const [cars, setCars] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -13,7 +15,7 @@ export function useCars({ role = "customer" } = {}) {
 
     let alive = true;
     setLoading(true);
-    fetch("http://localhost:8000/cars", { headers })
+    fetch(`${API_BASE_URL}/cars`, { headers })
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => {
         if (!alive) return;

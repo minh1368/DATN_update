@@ -6,6 +6,7 @@ class RentalRequestCreate(BaseModel):
     car_id: int
     start_date: date
     end_date: date
+    pickup_location: str | None = None
 
 class RentalRequestResponse(RentalRequestCreate):
     request_id: int

@@ -21,6 +21,13 @@ export function carIdFromSlug(slug) {
   return match ? Number(match[1]) : null;
 }
 
+export function carNameFromSlug(slug) {
+  const value = String(slug || "").trim().toLowerCase();
+  if (!value) return "";
+  // Nếu slug có đuôi -id thì bỏ id để lấy phần tên
+  return value.replace(/-\d+$/, "");
+}
+
 export function selfDriveDetailPath(car) {
   return `/thue-xe-tu-lai/${carSlug(car)}`;
 }
@@ -42,4 +49,5 @@ export function getCarImageUrl(car, fallbackCars) {
   const match = (fallbackCars || []).find((c) => c.name === name && c.brand === brand);
   return normalizeImageUrl(match?.image_url || "");
 }
+
 

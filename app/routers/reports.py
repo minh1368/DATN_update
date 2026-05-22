@@ -5,6 +5,7 @@ from datetime import datetime
 from fastapi.responses import StreamingResponse
 import csv
 import io
+from openpyxl import Workbook
 
 from app.dependencies import get_db, require_staff_or_admin
 from app.models.payment import Payment
@@ -68,4 +69,33 @@ def export_csv(db: Session = Depends(get_db), user: dict = Depends(require_staff
         media_type="text/csv"
     )
     response.headers["Content-Disposition"] = "attachment; filename=payments_report.csv"
+    return response
+
+@router.get("/export-excel")
+def export_excel(db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
+    payments = db.query(Payment).all()
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Payments"
+    headers = ["payment_id", "contract_id", "amount", "method", "status"]
+    sheet.append(headers)
+
+    for payment in payments:
+        sheet.append([
+            payment.payment_id,
+            payment.contract_id,
+            float(payment.amount),
+            payment.method,
+            payment.status,
+        ])
+
+    output = io.BytesIO()
+    workbook.save(output)
+    output.seek(0)
+
+    response = StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response.headers["Content-Disposition"] = "attachment; filename=payments_report.xlsx"
     return response

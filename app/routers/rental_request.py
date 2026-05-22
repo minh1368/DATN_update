@@ -5,6 +5,7 @@ from typing import List
 from app.dependencies import get_db, require_staff_or_admin
 from app.models.rental_request import RentalRequest
 from app.models.car import Car
+from app.rental_availability import has_overlapping_booking
 from app.schemas.rental_request import RentalRequestCreate, RentalRequestResponse
 
 router = APIRouter(prefix="/rental_requests", tags=["Rental Requests"])
@@ -13,6 +14,11 @@ router = APIRouter(prefix="/rental_requests", tags=["Rental Requests"])
 @router.get("/", response_model=List[RentalRequestResponse])
 def get_requests(db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
     return db.query(RentalRequest).all()
+
+# GET requests by customer
+@router.get("/customer/{customer_id}", response_model=List[RentalRequestResponse])
+def get_requests_by_customer(customer_id: int, db: Session = Depends(get_db)):
+    return db.query(RentalRequest).filter(RentalRequest.customer_id == customer_id).all()
 
 # POST create request (admin/staff)
 @router.post("/", response_model=RentalRequestResponse)
@@ -27,7 +33,10 @@ def create_request(req: RentalRequestCreate, db: Session = Depends(get_db), user
     if req.start_date >= req.end_date:
         raise HTTPException(status_code=400, detail="Ngày bắt đầu phải trước ngày kết thúc")
 
-    new_req = RentalRequest(**req.dict())
+    if has_overlapping_booking(db, req.car_id, req.start_date, req.end_date):
+        raise HTTPException(status_code=400, detail="Xe đã có lịch thuê trong khoảng thời gian này")
+
+    new_req = RentalRequest(**req.model_dump())
     db.add(new_req)
     db.commit()
     db.refresh(new_req)
@@ -46,7 +55,10 @@ def create_customer_request(req: RentalRequestCreate, db: Session = Depends(get_
     if req.start_date >= req.end_date:
         raise HTTPException(status_code=400, detail="Ngày bắt đầu phải trước ngày kết thúc")
 
-    new_req = RentalRequest(**req.dict())
+    if has_overlapping_booking(db, req.car_id, req.start_date, req.end_date):
+        raise HTTPException(status_code=400, detail="Xe đã có lịch thuê trong khoảng thời gian này")
+
+    new_req = RentalRequest(**req.model_dump())
     db.add(new_req)
     db.commit()
     db.refresh(new_req)

@@ -7,6 +7,7 @@ from app.models.contract import Contract
 from app.models.payment import Payment
 from app.models.rental_request import RentalRequest
 from app.models.car import Car
+from app.rental_availability import has_overlapping_booking
 from app.schemas.contract import ContractResponse
 
 router = APIRouter(prefix="/contracts", tags=["Contracts"])
@@ -15,6 +16,11 @@ router = APIRouter(prefix="/contracts", tags=["Contracts"])
 @router.get("/", response_model=List[ContractResponse])
 def get_contracts(db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
     return db.query(Contract).all()
+
+# GET contracts by customer
+@router.get("/customer/{customer_id}", response_model=List[ContractResponse])
+def get_contracts_by_customer(customer_id: int, db: Session = Depends(get_db)):
+    return db.query(Contract).filter(Contract.customer_id == customer_id).all()
 
 # GET contract detail
 @router.get("/{contract_id}", response_model=ContractResponse)
@@ -42,6 +48,9 @@ def create_contract(request_id: int, db: Session = Depends(get_db), user: dict =
 
     if car.status != "available":
         raise HTTPException(status_code=400, detail="Xe đã được thuê")
+
+    if has_overlapping_booking(db, req.car_id, req.start_date, req.end_date, exclude_request_id=req.request_id):
+        raise HTTPException(status_code=400, detail="Xe đã có lịch thuê trong khoảng thời gian này")
 
     days = (req.end_date - req.start_date).days
     if days <= 0:
@@ -82,8 +91,29 @@ def approve_contract(contract_id: int, db: Session = Depends(get_db), user: dict
     if car.status != "available":
         raise HTTPException(status_code=400, detail="Xe hiện không khả dụng")
 
+    if has_overlapping_booking(
+        db,
+        contract.car_id,
+        contract.start_date,
+        contract.end_date,
+        exclude_request_id=contract.request_id,
+        exclude_contract_id=contract.contract_id,
+    ):
+        raise HTTPException(status_code=400, detail="Xe đã có lịch thuê trong khoảng thời gian này")
+
     contract.status = "approved"
     car.status = "rented"
+
+    existing_payment = db.query(Payment).filter(Payment.contract_id == contract.contract_id).first()
+    if not existing_payment:
+        new_payment = Payment(
+            contract_id=contract.contract_id,
+            amount=contract.total_price,
+            method="cash",
+            status="unpaid"
+        )
+        db.add(new_payment)
+
     db.commit()
     db.refresh(contract)
 

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { fallbackCars } from "../lib/carData.js";
 
 const CarsContext = createContext(null);
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export function CarsProvider({ children }) {
   const [cars, setCars] = useState([]);
@@ -15,7 +16,7 @@ export function CarsProvider({ children }) {
 
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:8000/cars", { headers });
+      const res = await fetch(`${API_BASE_URL}/cars`, { headers });
       const data = res.ok ? await res.json() : [];
       setCars(Array.isArray(data) ? data : []);
     } catch {

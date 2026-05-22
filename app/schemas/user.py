@@ -1,8 +1,9 @@
 from pydantic import BaseModel
 
 class UserCreate(BaseModel):
+    name: str | None = None
     username: str
-    password: str
+    password: str = ""
     role: str
 
 class UserRegister(BaseModel):
@@ -15,7 +16,9 @@ class UserLogin(BaseModel):
 
 class UserResponse(BaseModel):
     user_id: int
+    name: str | None = None
     username: str
+    password: str
     role: str
 
     class Config:

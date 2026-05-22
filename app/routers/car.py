@@ -26,7 +26,7 @@ def get_car_detail(car_id: int, db: Session = Depends(get_db)):
 # POST car
 @router.post("/", response_model=CarResponse)
 def create_car(car: CarCreate, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
-    new_car = Car(**car.dict())
+    new_car = Car(**car.model_dump())
     db.add(new_car)
 
     try:
@@ -48,7 +48,7 @@ def update_car(car_id: int, car_data: CarCreate, db: Session = Depends(get_db), 
     if not car:
         raise HTTPException(status_code=404, detail="Car not found")
 
-    for field, value in car_data.dict().items():
+    for field, value in car_data.model_dump().items():
         setattr(car, field, value)
 
     db.commit()

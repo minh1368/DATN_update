@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import "../App.css";
+import AppFooter from "../components/AppFooter.jsx";
 import { useCars } from "../context/CarsContext.jsx";
 import { getCarImageUrl, selfDriveDetailPath } from "../lib/carUtils.js";
 import { fallbackCars } from "../lib/carData.js";
@@ -9,8 +10,12 @@ function uniqueValues(list, getter) {
   return Array.from(new Set(list.map(getter).filter(Boolean)));
 }
 
+const CARS_PER_PAGE = 8;
+
 export default function SelfDrivePage() {
+  const navigate = useNavigate();
   const { displayCars, loading } = useCars();
+  const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({
     location: "Hà Nội",
     startDate: "",
@@ -28,7 +33,7 @@ export default function SelfDrivePage() {
     const max = filters.priceMax ? Number(filters.priceMax) : null;
     const seats = filters.seats ? Number(filters.seats) : null;
 
-    let result = displayCars.filter((c) => c.status !== "rented");
+    let result = [...displayCars];
     if (filters.brand) result = result.filter((c) => c.brand === filters.brand);
     if (seats) result = result.filter((c) => Number(c.seats) === seats);
     if (max !== null && !Number.isNaN(max)) result = result.filter((c) => Number(c.price_per_day) <= max);
@@ -38,6 +43,24 @@ export default function SelfDrivePage() {
     if (filters.sort === "newest") result = [...result].sort((a, b) => (b.year || 0) - (a.year || 0));
     return result;
   }, [displayCars, filters]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredCars.length / CARS_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedCars = filteredCars.slice(
+    (currentPage - 1) * CARS_PER_PAGE,
+    currentPage * CARS_PER_PAGE
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [filters, displayCars]);
+
+  const handlePageChange = (nextPage) => {
+    setPage(nextPage);
+    document.getElementById("gf-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const isCarRented = (car) => String(car?.status || "").toLowerCase() === "rented";
 
   return (
     <div className="gf-page">
@@ -102,6 +125,9 @@ export default function SelfDrivePage() {
               <h2>Danh sách xe</h2>
               <p className="gf-muted">{loading ? "Đang tải..." : `${filteredCars.length} xe phù hợp`}</p>
             </div>
+            <div className="gf-page-status">
+              Trang {currentPage}/{totalPages}
+            </div>
             <div className="gf-toolbar-right">
               <label className="gf-inline">
                 <span>Hãng</span>
@@ -148,11 +174,19 @@ export default function SelfDrivePage() {
           </section>
 
           <section className="gf-grid">
-            {filteredCars.map((car) => (
-              <Link key={car.car_id} className="gf-card gf-card-link" to={selfDriveDetailPath(car)}>
+            {paginatedCars.map((car) => (
+              <Link
+                key={car.car_id}
+                className="gf-card gf-card-link"
+                to={selfDriveDetailPath(car)}
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigate(selfDriveDetailPath(car));
+                }}
+              >
                 <div className="gf-card-top">
                   <div className="gf-chip">{(car.fuel_type || "Self-drive").toUpperCase()}</div>
-                  <div className="gf-chip subtle">{car.transmission || "Tự động"}</div>
+                  {isCarRented(car) ? <div className="gf-chip subtle rented">Đang cho thuê</div> : null}
                 </div>
                 <div className="gf-card-title">
                   <h3>{car.name}</h3>
@@ -161,45 +195,56 @@ export default function SelfDrivePage() {
                 <div className="gf-card-media gf-card-media-img">
                   <img src={getCarImageUrl(car, fallbackCars)} alt={car.name} loading="lazy" />
                 </div>
-                <div className="gf-card-meta">
-                  <div className="gf-meta">
-                    <span>🪑</span>
-                    <strong>{car.seats ? `${car.seats} chỗ` : "-"}</strong>
-                  </div>
-                  <div className="gf-meta">
-                    <span>🎨</span>
-                    <strong>{car.color || "-"}</strong>
-                  </div>
-                  <div className="gf-meta">
-                    <span>📅</span>
-                    <strong>{car.year || "-"}</strong>
-                  </div>
-                </div>
                 <div className="gf-card-bottom">
                   <div>
-                    <div className="gf-price">{Number(car.price_per_day || 0).toLocaleString()} VND</div>
-                    <div className="gf-muted">/ ngày</div>
+                    <div className="gf-price">{Number(car.price_per_day || 0).toLocaleString()} VND / ngày</div>
                   </div>
                   <span className="car-card-button" role="button">
-                    Xem chi tiết
+                    Xem
                   </span>
                 </div>
               </Link>
             ))}
           </section>
+
+          {filteredCars.length > CARS_PER_PAGE ? (
+            <nav className="self-drive-pagination" aria-label="Phân trang danh sách xe">
+              <button
+                type="button"
+                className="news-page-btn"
+                disabled={currentPage === 1}
+                onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+              >
+                Trước
+              </button>
+              {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                <button
+                  key={pageNumber}
+                  type="button"
+                  className={`news-page-btn ${pageNumber === currentPage ? "active" : ""}`}
+                  onClick={() => handlePageChange(pageNumber)}
+                >
+                  {pageNumber}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="news-page-btn"
+                disabled={currentPage === totalPages}
+                onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+              >
+                Sau
+              </button>
+            </nav>
+          ) : null}
         </div>
       </main>
 
-      <footer className="footer">
-        <div className="footer-container">
-          <p>&copy; 2024 Phuong Dong Corporation. Tất cả quyền được bảo lưu.</p>
-          <div className="social-links">
-            <Link to="/">Trang chủ</Link>
-            <a href="tel:0566999666">Hotline</a>
-          </div>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }
+
+
+
 

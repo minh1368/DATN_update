@@ -11,5 +11,6 @@ class RentalRequest(Base):
     
     start_date = Column(Date)
     end_date = Column(Date)
+    pickup_location = Column(String)
     
     status = Column(String, default="pending")  # pending / approved / rejected

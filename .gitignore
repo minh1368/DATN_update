@@ -1,0 +1,9 @@
+.env
+frontend/.env
+*.log
+__pycache__/
+*.py[cod]
+tmp_*.py
+frontend/tmp_*.py
+node_modules/
+frontend/dist/
