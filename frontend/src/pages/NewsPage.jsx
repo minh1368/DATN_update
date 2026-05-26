@@ -35,7 +35,7 @@ export default function NewsPage() {
       <header className="gf-header">
         <div className="gf-header-inner">
           <Link to="/" className="gf-brand">
-            <span className="logo-icon">PDC</span>
+            <span className="logo-icon"><img src="/image/brand/logo.png" alt="Phương Đông" /></span>
             <span className="gf-brand-text">Phương Đông</span>
           </Link>
           <nav className="gf-nav">

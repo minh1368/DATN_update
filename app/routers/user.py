@@ -3,7 +3,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.dependencies import get_db, require_admin
+from app.dependencies import get_db, require_admin, require_staff_or_admin
 from app.models.user import User
 from app.schemas.user import UserCreate, UserLogin, UserRegister, UserResponse
 from app.security import verify_password
@@ -37,7 +37,7 @@ def ensure_unique_username_for_update(db: Session, username: str, user_id: int):
 
 
 @router.get("/", response_model=List[UserResponse])
-def get_users(db: Session = Depends(get_db), user: dict = Depends(require_admin)):
+def get_users(db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
     users = db.query(User).filter(User.role != "customer").order_by(User.user_id).all()
     return [user_response(account) for account in users]
 

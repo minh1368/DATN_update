@@ -267,7 +267,7 @@ export default function ProfilePage() {
       <header className="gf-header">
         <div className="gf-header-inner">
           <button className="gf-brand" onClick={() => navigate('/')}>
-            <span className="logo-icon">PDC</span>
+            <span className="logo-icon"><img src="/image/brand/logo.png" alt="Phương Đông" /></span>
             <span className="gf-brand-text">Thuê xe</span>
           </button>
           <nav className="gf-nav">

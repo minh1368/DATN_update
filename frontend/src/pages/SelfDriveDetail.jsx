@@ -7,7 +7,7 @@ const authStorage = window.sessionStorage;
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 import { fallbackCars } from "../lib/carData.js";
 import { carIdFromSlug, carNameFromSlug, getCarImageUrl, selfDriveDetailPath, slugify } from "../lib/carUtils.js";
-import { notifyUser } from "../lib/toast.js";
+import { getReadableErrorMessage, notifyUser } from "../lib/toast.js";
 import { useCars } from "../context/CarsContext.jsx";
 
 function PasswordVisibilityIcon({ visible }) {
@@ -23,6 +23,62 @@ function PasswordVisibilityIcon({ visible }) {
       <path d="M9.88 5.18A10.56 10.56 0 0 1 12 5c6.25 0 9.75 7 9.75 7a17.16 17.16 0 0 1-2.8 3.62" />
       <path d="M6.61 6.61C3.76 8.42 2.25 12 2.25 12s3.5 7 9.75 7a9.87 9.87 0 0 0 4.34-.99" />
     </svg>
+  );
+}
+
+function DetailSpecIcon({ type }) {
+  const icons = {
+    color: (
+      <>
+        <circle cx="9" cy="9" r="4" />
+        <circle cx="15" cy="9" r="4" />
+        <circle cx="12" cy="15" r="4" />
+        <circle className="gf-spec-icon-dot" cx="12" cy="12" r="1.5" />
+      </>
+    ),
+    seats: (
+      <>
+        <path d="M8.2 10.4a2.8 2.8 0 1 0 0-5.6 2.8 2.8 0 0 0 0 5.6Z" />
+        <path d="M15.8 10.4a2.8 2.8 0 1 0 0-5.6 2.8 2.8 0 0 0 0 5.6Z" />
+        <path d="M3.8 19c.4-3 2.1-5 4.4-5s4 2 4.4 5" />
+        <path d="M11.4 19c.4-3 2.1-5 4.4-5s4 2 4.4 5" />
+      </>
+    ),
+    type: (
+      <>
+        <path d="M13 2.8 5.8 13.1h5.2L10 21.2l7.9-11.4h-5.5L13 2.8Z" />
+      </>
+    ),
+    transmission: (
+      <>
+        <circle cx="7" cy="7" r="2.4" />
+        <circle cx="17" cy="7" r="2.4" />
+        <circle cx="7" cy="17" r="2.4" />
+        <circle cx="17" cy="17" r="2.4" />
+        <path d="M7 9.4v5.2M9.4 7h5.2M17 9.4v5.2" />
+      </>
+    ),
+    year: (
+      <>
+        <rect x="4.5" y="5.5" width="15" height="14" rx="2.3" />
+        <path d="M8 3.5v4M16 3.5v4M4.5 10h15" />
+        <path d="M8 13h2M12 13h2M16 13h.2M8 16h2M12 16h2M16 16h.2" />
+      </>
+    ),
+    status: (
+      <>
+        <path d="M7.2 12.4 10.5 15.7 17.3 8.9" />
+        <path d="M12 3.6 5.2 6.2v5.5c0 4.2 2.8 7.2 6.8 8.7 4-1.5 6.8-4.5 6.8-8.7V6.2L12 3.6Z" />
+      </>
+    ),
+  };
+
+  return (
+    <span className={`gf-spec-icon gf-spec-icon-${type}`} aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        {icons[type]}
+      </svg>
+    </span>
   );
 }
 
@@ -170,7 +226,7 @@ export default function SelfDriveDetailPage() {
       setShowBookingForm(true);
       notifyUser("Đăng nhập thành công. Bạn có thể đặt xe.", "success");
     } catch (error) {
-      setLoginError(error.message || "Đăng nhập thất bại");
+      setLoginError(getReadableErrorMessage(error, "Đăng nhập thất bại"));
     }
   };
 
@@ -219,7 +275,7 @@ export default function SelfDriveDetailPage() {
       setRegisterData({ fullName: "", email: "", phone: "", address: "", password: "" });
       notifyUser("Đăng ký thành công. Vui lòng đăng nhập để đặt xe.", "success");
     } catch (error) {
-      setLoginError(error.message || "Đăng ký thất bại");
+      setLoginError(getReadableErrorMessage(error, "Đăng ký thất bại"));
     }
   };
 
@@ -296,7 +352,7 @@ export default function SelfDriveDetailPage() {
       <header className="gf-header">
         <div className="gf-header-inner">
           <Link to="/" className="gf-brand">
-            <span className="logo-icon">PDC</span>
+            <span className="logo-icon"><img src="/image/brand/logo.png" alt="Phương Đông" /></span>
             <span className="gf-brand-text">Thuê xe</span>
           </Link>
           <nav className="gf-nav">
@@ -351,31 +407,45 @@ export default function SelfDriveDetailPage() {
 
               <div className="gf-detail-specgrid">
                 <div className="gf-spec">
-                  <span>🎨</span>
+                  <DetailSpecIcon type="color" />
                   <div>
                     <div className="gf-muted">Màu</div>
                     <strong>{car?.color || "-"}</strong>
                   </div>
                 </div>
                 <div className="gf-spec">
-                  <span>📅</span>
+                  <DetailSpecIcon type="seats" />
                   <div>
-                    <div className="gf-muted">Năm</div>
+                    <div className="gf-muted">Chỗ</div>
+                    <strong>{car?.seats ? `${car.seats} chỗ` : "-"}</strong>
+                  </div>
+                </div>
+                <div className="gf-spec">
+                  <DetailSpecIcon type="type" />
+                  <div>
+                    <div className="gf-muted">Loại xe</div>
+                    <strong>{car?.fuel_type || "-"}</strong>
+                  </div>
+                </div>
+                <div className="gf-spec">
+                  <DetailSpecIcon type="transmission" />
+                  <div>
+                    <div className="gf-muted">Hộp số</div>
+                    <strong>{car?.transmission || "-"}</strong>
+                  </div>
+                </div>
+                <div className="gf-spec">
+                  <DetailSpecIcon type="year" />
+                  <div>
+                    <div className="gf-muted">Năm sản xuất</div>
                     <strong>{car?.year || "-"}</strong>
                   </div>
                 </div>
                 <div className="gf-spec">
-                  <span>🧾</span>
+                  <DetailSpecIcon type="status" />
                   <div>
                     <div className="gf-muted">Trạng thái</div>
                     <strong>{car?.status || "-"}</strong>
-                  </div>
-                </div>
-                <div className="gf-spec">
-                  <span>⚡</span>
-                  <div>
-                    <div className="gf-muted">Loại</div>
-                    <strong>{car?.fuel_type || "-"}</strong>
                   </div>
                 </div>
               </div>
@@ -416,17 +486,9 @@ export default function SelfDriveDetailPage() {
             <div className="gf-detail-section">
               <h2>Hình thức thanh toán</h2>
               <ul className="gf-list">
-                <li>Tiền mặt</li>
-                <li>Chuyển khoản</li>
-              </ul>
-            </div>
-
-            <div className="gf-detail-section">
-              <h2>Chính sách đặt cọc (thế chân)</h2>
-              <ul className="gf-list">
-                <li>Đặt cọc trước khi nhận xe</li>
-                <li>Hoàn cọc sau khi đối soát tình trạng xe</li>
-                <li>Khấu trừ nếu phát sinh vi phạm/hư hỏng (nếu có)</li>
+                <li>Thanh toán khi nhận xe sau khi nhân viên xác nhận thông tin đặt xe</li>
+                <li>Khách hàng kiểm tra tình trạng xe, giấy tờ và lịch thuê trước khi thanh toán</li>
+                <li>Hỗ trợ thanh toán linh hoạt tại điểm nhận xe theo hướng dẫn của nhân viên</li>
               </ul>
             </div>
           </section>

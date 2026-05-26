@@ -15,10 +15,59 @@ import { selfDriveDetailPath } from "./lib/carUtils.js";
 import { useCars } from "./context/CarsContext.jsx";
 import { getCarImageUrl } from "./lib/carUtils.js";
 import { fallbackCars } from "./lib/carData.js";
-import { notifyUser } from "./lib/toast.js";
+import { getReadableErrorMessage, notifyUser } from "./lib/toast.js";
 
 const authStorage = window.sessionStorage;
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+function normalizeRoleValue(value) {
+  return String(value || "customer").trim().toLowerCase();
+}
+
+function readCarImageFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      resolve("");
+      return;
+    }
+    if (!file.type?.startsWith("image/")) {
+      reject(new Error("Vui lòng chọn đúng file ảnh xe."));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Không thể đọc ảnh xe."));
+    reader.onload = () => {
+      const originalDataUrl = String(reader.result || "");
+      const image = new Image();
+      image.onerror = () => {
+        if (originalDataUrl.startsWith("data:image/")) {
+          resolve(originalDataUrl);
+          return;
+        }
+        reject(new Error("Ảnh xe không hợp lệ."));
+      };
+      image.onload = () => {
+        try {
+          const maxSize = 1200;
+          const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+          const width = Math.max(1, Math.round(image.width * scale));
+          const height = Math.max(1, Math.round(image.height * scale));
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d");
+          context.drawImage(image, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.86));
+        } catch {
+          resolve(originalDataUrl);
+        }
+      };
+      image.src = originalDataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 function App() {
   return (
@@ -96,6 +145,237 @@ function PasswordVisibilityIcon({ visible }) {
   );
 }
 
+function PaymentActionIcon({ type }) {
+  if (type === "edit") {
+    return (
+      <svg className="table-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4.5 19.5h4.2L18.6 9.6a2 2 0 0 0 0-2.8l-1.4-1.4a2 2 0 0 0-2.8 0L4.5 15.3v4.2Z" />
+        <path d="m13.2 6.6 4.2 4.2" />
+      </svg>
+    );
+  }
+
+  if (type === "check") {
+    return (
+      <svg className="table-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M5 12.5 9.2 17 19 7" />
+      </svg>
+    );
+  }
+
+  if (type === "reject") {
+    return (
+      <svg className="table-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 7l10 10M17 7 7 17" />
+      </svg>
+    );
+  }
+
+  if (type === "money") {
+    return (
+      <svg className="table-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3.5" y="6.5" width="17" height="11" rx="2.2" />
+        <path d="M6.8 9.2c1.2 0 2.2-1 2.2-2.2M17.2 9.2c-1.2 0-2.2-1-2.2-2.2M6.8 14.8c1.2 0 2.2 1 2.2 2.2M17.2 14.8c-1.2 0-2.2 1-2.2 2.2" />
+        <circle cx="12" cy="12" r="2.4" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className="table-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4.5 7h15" />
+      <path d="M9.5 7V4.8h5V7" />
+      <path d="M7 7l1 12.2c.1 1 1 1.8 2 1.8h4c1 0 1.9-.8 2-1.8L17 7" />
+      <path d="M10.5 11v6M13.5 11v6" />
+    </svg>
+  );
+}
+
+function HomeSectionIcon({ type, className = "" }) {
+  const icons = {
+    selfDrive: (
+      <>
+        <path d="M4 14.2 5.6 9.5A3 3 0 0 1 8.4 7.5h7.2a3 3 0 0 1 2.8 2l1.6 4.7" />
+        <path d="M5 14h14v4.2a1.3 1.3 0 0 1-1.3 1.3H16a1.3 1.3 0 0 1-1.3-1.3v-.7H9.3v.7A1.3 1.3 0 0 1 8 19.5H6.3A1.3 1.3 0 0 1 5 18.2V14Z" />
+        <path d="M7.2 14.2h2M14.8 14.2h2M8 7.5l1-2h6l1 2" />
+      </>
+    ),
+    chauffeur: (
+      <>
+        <circle cx="12" cy="7" r="3" />
+        <path d="M6.2 20c.7-4.2 2.6-6.2 5.8-6.2s5.1 2 5.8 6.2" />
+        <path d="M8.8 14.8 12 18l3.2-3.2" />
+      </>
+    ),
+    enterprise: (
+      <>
+        <path d="M5 20V5.8A1.8 1.8 0 0 1 6.8 4h7.4A1.8 1.8 0 0 1 16 5.8V20" />
+        <path d="M16 10h2.2A1.8 1.8 0 0 1 20 11.8V20M4 20h17" />
+        <path d="M8 8h2M12 8h1M8 11h2M12 11h1M8 14h2M12 14h1" />
+      </>
+    ),
+    route: (
+      <>
+        <path d="M6.5 18.5c2.7-2.5 8.3 1.2 10.8-1.7 2.7-3.2-4.5-5.4-2.1-8.5 1-1.3 2.7-1.8 4.2-1.8" />
+        <circle cx="5.5" cy="18.5" r="2.2" />
+        <circle cx="18.5" cy="6.5" r="2.2" />
+        <path d="M9 6h.1M6 10h.1M12 12h.1" />
+      </>
+    ),
+    sedan: (
+      <>
+        <path d="M3.7 13.7 5.5 9.6a3 3 0 0 1 2.8-1.8h7.4a3 3 0 0 1 2.8 1.8l1.8 4.1" />
+        <path d="M5 13.5h14.2v4.4H5z" />
+        <circle cx="8" cy="18" r="1.8" />
+        <circle cx="16.2" cy="18" r="1.8" />
+      </>
+    ),
+    van: (
+      <>
+        <path d="M4 7h9.2a2 2 0 0 1 2 2v1.4h2.2L20 14v3.5H4V7Z" />
+        <path d="M15.2 10.4V14H20M7 10h2.5M11 10h1.3" />
+        <circle cx="7.2" cy="17.5" r="1.8" />
+        <circle cx="16.5" cy="17.5" r="1.8" />
+      </>
+    ),
+    limousine: (
+      <>
+        <path d="M3.5 14.2h17v3.5h-17z" />
+        <path d="M5.8 14.2 8 9.2h8l2.2 5" />
+        <path d="M8.4 11.4h7.2M7 17.7h10" />
+        <circle cx="7.2" cy="17.8" r="1.5" />
+        <circle cx="16.8" cy="17.8" r="1.5" />
+      </>
+    ),
+    bus: (
+      <>
+        <rect x="5" y="4.5" width="14" height="14" rx="2.2" />
+        <path d="M7.5 8h9M7.5 11h9M8 18.5v1.5M16 18.5v1.5" />
+        <circle cx="8.5" cy="15" r="1.1" />
+        <circle cx="15.5" cy="15" r="1.1" />
+      </>
+    ),
+    quote: (
+      <>
+        <path d="M8.4 6.5c-2.2 1.4-3.4 3.1-3.4 5.4v4.6h5.1v-5H7.6c.1-1.4.9-2.4 2.3-3.2L8.4 6.5Z" />
+        <path d="M16.8 6.5c-2.2 1.4-3.4 3.1-3.4 5.4v4.6h5.1v-5H16c.1-1.4.9-2.4 2.3-3.2l-1.5-1.8Z" />
+      </>
+    ),
+    review: (
+      <>
+        <path d="m12 3.8 2.2 4.4 4.8.7-3.5 3.4.8 4.8-4.3-2.3-4.3 2.3.8-4.8L5 8.9l4.8-.7L12 3.8Z" />
+      </>
+    ),
+    account: (
+      <>
+        <circle cx="12" cy="8" r="3.2" />
+        <path d="M5.7 20c.8-4 2.9-6 6.3-6s5.5 2 6.3 6" />
+      </>
+    ),
+    support: (
+      <>
+        <path d="M5 12a7 7 0 0 1 14 0v3a2.5 2.5 0 0 1-2.5 2.5H15" />
+        <path d="M5 12v3.2A1.8 1.8 0 0 0 6.8 17H8v-5H5ZM19 12v5h-3v-5h3Z" />
+        <path d="M11 19h3" />
+      </>
+    ),
+    airport: (
+      <>
+        <path d="M12 3.8v16.4" />
+        <path d="M4.4 13.7 12 10l7.6 3.7v2.1L12 13.7l-7.6 2.1v-2.1Z" />
+        <path d="m9.1 20.2 2.9-2 2.9 2M9.5 6.5 12 4l2.5 2.5" />
+      </>
+    ),
+    customService: (
+      <>
+        <rect x="4.5" y="5" width="15" height="11" rx="2.2" />
+        <path d="M8 19h8M10 16v3M14 16v3M8 9.2h3.1M8 12h6.8" />
+        <path d="m17.4 8.4 1.1 1.1-2.9 2.9-1.6.5.5-1.6 2.9-2.9Z" />
+      </>
+    ),
+    history: (
+      <>
+        <path d="M12 7v5l3.4 2" />
+        <path d="M5.3 8.5A8 8 0 1 1 4 13" />
+        <path d="M4 5.8v3.4h3.4" />
+      </>
+    ),
+    mission: (
+      <>
+        <circle cx="12" cy="12" r="7.5" />
+        <circle cx="12" cy="12" r="3.8" />
+        <path d="M12 3.5V6M20.5 12H18M12 18v2.5M6 12H3.5" />
+      </>
+    ),
+    trust: (
+      <>
+        <path d="M12 3.7 18.5 6v5.2c0 4.2-2.5 7.2-6.5 8.9-4-1.7-6.5-4.7-6.5-8.9V6L12 3.7Z" />
+        <path d="m8.7 12.1 2.2 2.2 4.6-5" />
+      </>
+    ),
+    safety: (
+      <>
+        <path d="M6 15.8V9.5l6-3.8 6 3.8v6.3" />
+        <path d="M8.5 20h7M9.2 15.8c.6-1.4 1.5-2.1 2.8-2.1s2.2.7 2.8 2.1" />
+        <circle cx="12" cy="10.7" r="2.1" />
+      </>
+    ),
+    partnership: (
+      <>
+        <path d="M8.5 12.8 6.8 11a2.2 2.2 0 0 1 0-3.1 2.2 2.2 0 0 1 3.1 0l1.1 1.1" />
+        <path d="m15.5 11.2 1.7 1.8a2.2 2.2 0 0 1 0 3.1 2.2 2.2 0 0 1-3.1 0L13 15" />
+        <path d="m9.5 15.2 5-6.4" />
+      </>
+    ),
+    gps: (
+      <>
+        <path d="M12 21s6-5.2 6-10.2a6 6 0 1 0-12 0C6 15.8 12 21 12 21Z" />
+        <circle cx="12" cy="10.8" r="2.3" />
+      </>
+    ),
+    fuel: (
+      <>
+        <path d="M7 20V5.5A1.5 1.5 0 0 1 8.5 4h5A1.5 1.5 0 0 1 15 5.5V20" />
+        <path d="M6 20h10M9 8h4M15 8.5l3 3V18a1.5 1.5 0 0 0 3 0v-3.8" />
+        <path d="M18 11.5h2" />
+      </>
+    ),
+    team: (
+      <>
+        <circle cx="12" cy="7.2" r="2.8" />
+        <circle cx="6.8" cy="10.2" r="2.2" />
+        <circle cx="17.2" cy="10.2" r="2.2" />
+        <path d="M6 20c.7-3.6 2.7-5.4 6-5.4s5.3 1.8 6 5.4" />
+        <path d="M2.8 18.5c.5-2.4 1.8-3.7 4-3.8M17.2 14.7c2.2.1 3.5 1.4 4 3.8" />
+      </>
+    ),
+    star: (
+      <path d="m12 3.8 2.2 4.45 4.9.72-3.55 3.46.84 4.88L12 15l-4.39 2.31.84-4.88L4.9 8.97l4.9-.72L12 3.8Z" />
+    ),
+  };
+
+  return (
+    <span className={`home-section-icon home-section-icon-${type} ${className}`} aria-hidden="true">
+      <svg viewBox="0 0 24 24">{icons[type]}</svg>
+    </span>
+  );
+}
+
+function RatingRow({ rating = 5 }) {
+  const value = Math.max(0, Math.min(5, Number(rating) || 0));
+  return (
+    <span className="rating-icons" aria-label={`${value} sao`}>
+      {Array.from({ length: 5 }, (_, index) => (
+        <span key={index} className={index < value ? "filled" : ""}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m12 3.8 2.2 4.45 4.9.72-3.55 3.46.84 4.88L12 15l-4.39 2.31.84-4.88L4.9 8.97l4.9-.72L12 3.8Z" />
+          </svg>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function FloatingChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [chatMode, setChatMode] = useState("ai");
@@ -110,6 +390,8 @@ function FloatingChatWidget() {
   const [selectedSupportConversation, setSelectedSupportConversation] = useState(null);
   const [supportStatus, setSupportStatus] = useState("");
   const [supportUnreadCount, setSupportUnreadCount] = useState(0);
+  const selectedSupportConversationIdRef = useRef(null);
+  const supportMessagesEndRef = useRef(null);
   const [messages, setMessages] = useState([
     {
       role: "bot",
@@ -119,7 +401,7 @@ function FloatingChatWidget() {
 
   const getChatUser = () => {
     const userData = JSON.parse(authStorage.getItem("userData") || "{}");
-    const role = userData.role || authStorage.getItem("userRole") || "customer";
+    const role = normalizeRoleValue(userData.role || authStorage.getItem("userRole") || "customer");
     return {
       role,
       customerId: userData.customer_id || authStorage.getItem("customerId") || null,
@@ -166,7 +448,18 @@ function FloatingChatWidget() {
     const conversations = Array.isArray(data) ? data : [];
     setSupportConversations(conversations);
     setSupportUnreadCount(conversations.reduce((total, item) => total + Number(item.staff_unread_count || 0), 0));
-    if (!selectedSupportConversation && conversations.length > 0) {
+    const selectedId = selectedSupportConversationIdRef.current;
+    const stillSelected = selectedId
+      ? conversations.find((conversation) => String(conversation.conversation_id) === String(selectedId))
+      : null;
+
+    if (stillSelected) {
+      setSelectedSupportConversation(stillSelected);
+      return;
+    }
+
+    if (!selectedId && conversations.length > 0) {
+      selectedSupportConversationIdRef.current = conversations[0].conversation_id;
       setSelectedSupportConversation(conversations[0]);
       loadSupportMessages(conversations[0].conversation_id);
     }
@@ -221,6 +514,13 @@ function FloatingChatWidget() {
     }, 6000);
     return () => window.clearInterval(timer);
   }, [isOpen, chatMode, isStaffChat, conversationId, selectedSupportConversation?.conversation_id]);
+
+  useEffect(() => {
+    if (!isOpen || chatMode !== "human") return;
+    window.requestAnimationFrame(() => {
+      supportMessagesEndRef.current?.scrollIntoView({ block: "end" });
+    });
+  }, [supportMessages, isOpen, chatMode, selectedSupportConversation?.conversation_id]);
 
   const ensureSupportConversation = async () => {
     if (conversationId) return conversationId;
@@ -301,6 +601,7 @@ function FloatingChatWidget() {
   };
 
   const handleSelectSupportConversation = (conversation) => {
+    selectedSupportConversationIdRef.current = conversation.conversation_id;
     setSelectedSupportConversation(conversation);
     setStaffReply("");
     loadSupportMessages(conversation.conversation_id);
@@ -397,6 +698,7 @@ function FloatingChatWidget() {
                       {message.message}
                     </div>
                   ))}
+                  <div ref={supportMessagesEndRef} className="chat-scroll-anchor" />
                 </div>
                 <form className="chat-input-row" onSubmit={handleSendStaffReply}>
                   <input
@@ -445,6 +747,7 @@ function FloatingChatWidget() {
                 ) : (
                   <div className="chat-message bot">Bạn đang chat với nhân viên tư vấn. Hãy gửi lời nhắn để bắt đầu.</div>
                 )}
+                <div ref={supportMessagesEndRef} className="chat-scroll-anchor" />
               </div>
               <form className="chat-input-row" onSubmit={handleSendHumanMessage}>
                 <input
@@ -515,6 +818,7 @@ function Home({ adminMode = false, initialAbout = false }) {
     transmission: "",
     year: "",
     description: "",
+    image_url: "",
   });
   const [showCreateCarForm, setShowCreateCarForm] = useState(false);
   const [editingCar, setEditingCar] = useState(null);
@@ -574,6 +878,11 @@ function Home({ adminMode = false, initialAbout = false }) {
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [loggedInUser, setLoggedInUser] = useState(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const normalizedRole = normalizeRoleValue(role);
+  const canAccessDashboard = normalizedRole === "admin" || normalizedRole === "staff";
+  const isAdmin = normalizedRole === "admin";
   const [customerReviews, setCustomerReviews] = useState([]);
   const [reviewForm, setReviewForm] = useState({ rating: "5", message: "" });
   const [reviewNotice, setReviewNotice] = useState("");
@@ -594,6 +903,8 @@ function Home({ adminMode = false, initialAbout = false }) {
   const pointerIdRef = useRef(null);
   const pointerDetailPathRef = useRef(null);
   const lastWindowScrollYRef = useRef(0);
+  const adminNotificationReadyRef = useRef(false);
+  const customerNotificationReadyRef = useRef(false);
 
   useEffect(() => {
     setShowAboutSection(initialAbout);
@@ -728,7 +1039,7 @@ function Home({ adminMode = false, initialAbout = false }) {
     navigate("/gioi-thieu");
   };
 
-  const displayCars = role === "admin" || role === "staff" ? cars : sharedDisplayCars;
+  const displayCars = canAccessDashboard ? cars : sharedDisplayCars;
 
   const notify = (message, type = "info") => {
     notifyUser(message, type);
@@ -869,7 +1180,21 @@ function Home({ adminMode = false, initialAbout = false }) {
         <button type="button" className="action-button secondary" disabled={safePage <= 1} onClick={() => setPage((page) => Math.max(1, page - 1))}>
           Trước
         </button>
-        <span>Trang {safePage} / {totalPages}</span>
+        <div className="table-page-numbers" aria-label="Chọn trang">
+          {getPaginationItems(safePage, totalPages).map((pageItem, index) => pageItem === "ellipsis" ? (
+            <span key={`ellipsis-${index}`} className="table-page-ellipsis">...</span>
+          ) : (
+            <button
+              key={pageItem}
+              type="button"
+              className={`table-page-number ${pageItem === safePage ? "active" : ""}`}
+              onClick={() => setPage(pageItem)}
+              aria-current={pageItem === safePage ? "page" : undefined}
+            >
+              {pageItem}
+            </button>
+          ))}
+        </div>
         <button type="button" className="action-button" disabled={safePage >= totalPages} onClick={() => setPage((page) => Math.min(totalPages, page + 1))}>
           Sau
         </button>
@@ -877,15 +1202,67 @@ function Home({ adminMode = false, initialAbout = false }) {
     </div>
   );
 
+  const getPaginationItems = (currentPage, totalPages) => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+    if (currentPage <= 3) {
+      return [1, 2, 3, "ellipsis", totalPages];
+    }
+    if (currentPage >= totalPages - 2) {
+      return [1, "ellipsis", totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, "ellipsis", currentPage - 1, currentPage, currentPage + 1, "ellipsis", totalPages];
+  };
+
   const headers = {
-    "X-User-Role": role,
+    "X-User-Role": normalizedRole,
     "Content-Type": "application/json",
+  };
+  const getNotificationStorageKey = () => {
+    const customerId = getCurrentCustomerId();
+    if (canAccessDashboard) return `notifications:${normalizedRole}`;
+    if (customerId) return `notifications:customer:${customerId}`;
+    return "notifications:guest";
+  };
+  const unreadNotificationCount = notifications.filter((item) => !item.read).length;
+  const getCurrentCustomerId = () => {
+    const userData = JSON.parse(authStorage.getItem("userData") || "{}");
+    return userData.customer_id || authStorage.getItem("customerId") || "";
+  };
+  const addNotification = (notification) => {
+    setNotifications((prev) => {
+      if (prev.some((item) => item.id === notification.id)) return prev;
+      const next = [{ ...notification, read: false, createdAt: notification.createdAt || new Date().toISOString() }, ...prev].slice(0, 30);
+      localStorage.setItem(getNotificationStorageKey(), JSON.stringify(next));
+      return next;
+    });
+  };
+  const markNotificationsRead = () => {
+    setNotifications((prev) => {
+      const next = prev.map((item) => ({ ...item, read: true }));
+      localStorage.setItem(getNotificationStorageKey(), JSON.stringify(next));
+      return next;
+    });
+  };
+  const markNotificationRead = (notificationId) => {
+    setNotifications((prev) => {
+      const next = prev.map((item) => (item.id === notificationId ? { ...item, read: true } : item));
+      localStorage.setItem(getNotificationStorageKey(), JSON.stringify(next));
+      return next;
+    });
+  };
+  const formatNotificationTime = (value) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
   };
 
   const refreshData = () => {
     setStatsError(null);
 
-    if (role === "admin" || role === "staff") {
+    if (canAccessDashboard) {
       // Lấy dữ liệu thống kê
       fetch(`${API_BASE_URL}/reports/summary`, { headers })
         .then((response) => response.json())
@@ -935,6 +1312,121 @@ function Home({ adminMode = false, initialAbout = false }) {
   };
 
   useEffect(() => {
+    adminNotificationReadyRef.current = false;
+    customerNotificationReadyRef.current = false;
+    try {
+      const savedNotifications = JSON.parse(localStorage.getItem(getNotificationStorageKey()) || "[]");
+      setNotifications(Array.isArray(savedNotifications) ? savedNotifications : []);
+    } catch {
+      setNotifications([]);
+    }
+  }, [role, loggedInUser]);
+
+  useEffect(() => {
+    if (!loggedInUser || !canAccessDashboard) return undefined;
+    let alive = true;
+    const seenKey = `adminSeenRentalRequests:${role}`;
+    const loadAdminRentalNotifications = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/rental_requests`, { headers });
+        if (!response.ok) return;
+        const data = await response.json();
+        const rentalRequests = Array.isArray(data) ? data : [];
+        if (alive) {
+          setRequests(rentalRequests);
+        }
+        const seen = new Set(JSON.parse(localStorage.getItem(seenKey) || "[]").map(String));
+        const ids = rentalRequests.map((item) => String(item.request_id)).filter(Boolean);
+
+        if (!adminNotificationReadyRef.current) {
+          localStorage.setItem(seenKey, JSON.stringify(Array.from(new Set([...seen, ...ids]))));
+          adminNotificationReadyRef.current = true;
+          return;
+        }
+
+        const nextSeen = new Set([...seen, ...ids]);
+        const newRequests = rentalRequests.filter((item) => item.request_id && !seen.has(String(item.request_id)));
+        if (newRequests.length > 0) {
+          localStorage.setItem(seenKey, JSON.stringify(Array.from(nextSeen)));
+        }
+        if (!alive) return;
+        newRequests.forEach((item) => {
+          addNotification({
+            id: `admin-rental-${item.request_id}`,
+            title: "Yêu cầu thuê xe mới",
+            message: `Khách hàng vừa gửi yêu cầu thuê xe #${item.request_id}.`,
+            createdAt: item.created_at || new Date().toISOString(),
+          });
+          notify("Có yêu cầu thuê xe mới.", "info");
+        });
+      } catch {
+        // Silent polling failure.
+      }
+    };
+
+    loadAdminRentalNotifications();
+    const timer = window.setInterval(loadAdminRentalNotifications, 8000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [role, loggedInUser]);
+
+  useEffect(() => {
+    const customerId = getCurrentCustomerId();
+    if (!loggedInUser || normalizedRole !== "customer" || !customerId) return undefined;
+    let alive = true;
+    const seenKey = `customerRentalStatusNotifications:${customerId}`;
+    const loadCustomerRentalNotifications = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/rental_requests/customer/${customerId}`);
+        if (!response.ok) return;
+        const data = await response.json();
+        const rentalRequests = Array.isArray(data) ? data : [];
+        const processedRequests = rentalRequests.filter((item) =>
+          ["approved", "completed", "rejected"].includes(String(item.status || "").toLowerCase())
+        );
+        const seen = new Set(JSON.parse(localStorage.getItem(seenKey) || "[]").map(String));
+        const ids = processedRequests
+          .map((item) => `${item.request_id}:${String(item.status || "").toLowerCase()}`)
+          .filter(Boolean);
+
+        const nextSeen = new Set([...seen, ...ids]);
+        const newlyProcessed = processedRequests.filter((item) => {
+          const status = String(item.status || "").toLowerCase();
+          return item.request_id && !seen.has(`${item.request_id}:${status}`);
+        });
+        if (newlyProcessed.length > 0) {
+          localStorage.setItem(seenKey, JSON.stringify(Array.from(nextSeen)));
+        }
+        if (!alive) return;
+        newlyProcessed.forEach((item) => {
+          const status = String(item.status || "").toLowerCase();
+          const isRejected = status === "rejected";
+          addNotification({
+            id: `customer-${status}-${item.request_id}`,
+            title: isRejected ? "Yêu cầu thuê xe bị từ chối" : "Xe được thuê thành công",
+            message: isRejected
+              ? `Yêu cầu thuê xe #${item.request_id} đã bị từ chối.`
+              : `Yêu cầu thuê xe #${item.request_id} đã được duyệt và tạo hợp đồng.`,
+            createdAt: item.updated_at || new Date().toISOString(),
+          });
+          notify(isRejected ? "Yêu cầu thuê xe bị từ chối." : "Xe được thuê thành công.", isRejected ? "error" : "success");
+        });
+      } catch {
+        // Silent polling failure.
+      }
+    };
+
+    loadCustomerRentalNotifications();
+    const timer = window.setInterval(loadCustomerRentalNotifications, 8000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [role, loggedInUser]);
+
+  useEffect(() => {
     // Kiểm tra localStorage khi load trang
     const savedUser = authStorage.getItem('loggedInUser');
     const savedRole = authStorage.getItem('userRole');
@@ -954,7 +1446,7 @@ function Home({ adminMode = false, initialAbout = false }) {
       try {
         const userData = JSON.parse(savedUserData);
         setLoggedInUser(userData.name || userData.username);
-        setRole(userData.role);
+        setRole(normalizeRoleValue(userData.role || savedRole));
       } catch (error) {
         console.error('Error parsing saved user data:', error);
         // Xóa dữ liệu lỗi
@@ -969,10 +1461,16 @@ function Home({ adminMode = false, initialAbout = false }) {
 
   useEffect(() => {
     // Chỉ đồng bộ cars từ context khi role là customer
-    if (role === "customer") {
+    if (normalizedRole === "customer") {
       setCars(fetchedCars);
     }
   }, [fetchedCars, role]);
+
+  useEffect(() => {
+    if (!isAdmin && activeTab === "users") {
+      setActiveTab("summary");
+    }
+  }, [activeTab, isAdmin]);
 
   // Đóng user dropdown khi click ra ngoài
   useEffect(() => {
@@ -980,13 +1478,16 @@ function Home({ adminMode = false, initialAbout = false }) {
       if (showUserMenu && !event.target.closest('.user-menu-container')) {
         setShowUserMenu(false);
       }
+      if (showNotifications && !event.target.closest('.notification-container')) {
+        setShowNotifications(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showUserMenu]);
+  }, [showUserMenu, showNotifications]);
 
   const handleLoginClick = () => {
     setShowLoginForm(true);
@@ -1092,17 +1593,18 @@ function Home({ adminMode = false, initialAbout = false }) {
         throw new Error(errorData?.detail || "Đăng nhập thất bại");
       }
       const user = await response.json();
-      const customer = user.role === "customer" ? await fetchCustomerByEmail(user.username) : null;
+      const loginRole = normalizeRoleValue(user.role);
+      const customer = loginRole === "customer" ? await fetchCustomerByEmail(user.username) : null;
       const userProfile = customer
         ? { ...user, ...customer }
         : { ...user, email: user.username?.includes("@") ? user.username : "" };
 
       setLoggedInUser(userProfile.name || user.username);
-      setRole(user.role);
+      setRole(loginRole);
       
       // Lưu vào localStorage
       authStorage.setItem('loggedInUser', userProfile.name || user.username);
-      authStorage.setItem('userRole', user.role);
+      authStorage.setItem('userRole', loginRole);
       authStorage.setItem('userData', JSON.stringify(userProfile));
       if (customer?.customer_id) {
         authStorage.setItem('customerId', String(customer.customer_id));
@@ -1114,7 +1616,7 @@ function Home({ adminMode = false, initialAbout = false }) {
       setLoginData({ username: "", password: "" });
     } catch (error) {
       console.error(error);
-      notify(error.message || "Đăng nhập thất bại", "error");
+      notify(getReadableErrorMessage(error, "Đăng nhập thất bại"), "error");
     }
   };
 
@@ -1145,7 +1647,7 @@ function Home({ adminMode = false, initialAbout = false }) {
       setRegisterData({ fullName: "", email: "", phone: "", address: "", password: "" });
     } catch (error) {
       console.error(error);
-      notify(error.message || "Đăng ký thất bại", "error");
+      notify(getReadableErrorMessage(error, "Đăng ký thất bại"), "error");
     }
   };
 
@@ -1236,6 +1738,7 @@ function Home({ adminMode = false, initialAbout = false }) {
     };
     const ok = await handleJsonPost(`${API_BASE_URL}/cars`, body);
     if (!ok) return;
+    await refreshCarsContext?.();
     setNewCar({
       name: "",
       brand: "",
@@ -1248,6 +1751,7 @@ function Home({ adminMode = false, initialAbout = false }) {
       transmission: "",
       year: "",
       description: "",
+      image_url: "",
     });
     setShowCreateCarForm(false);
     notify("Thêm xe mới thành công.", "success");
@@ -1267,7 +1771,20 @@ function Home({ adminMode = false, initialAbout = false }) {
       transmission: car.transmission || "",
       year: car.year || "",
       description: car.description || "",
+      image_url: car.image_url || getCarImageUrl(car, fallbackCars) || "",
     });
+  };
+
+  const handleCarImageChange = async (event, setter) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const imageUrl = await readCarImageFile(file);
+      setter((current) => ({ ...current, image_url: imageUrl }));
+    } catch (error) {
+      notify(error.message || "Không thể tải ảnh xe", "error");
+      event.target.value = "";
+    }
   };
 
   const handleUpdateCar = async (e) => {
@@ -1280,8 +1797,11 @@ function Home({ adminMode = false, initialAbout = false }) {
       year: editingCar.year ? Number(editingCar.year) : null,
     };
     delete body.car_id;
-    await handleJsonPost(`${API_BASE_URL}/cars/${editingCar.car_id}`, body, "PUT");
+    const ok = await handleJsonPost(`${API_BASE_URL}/cars/${editingCar.car_id}`, body, "PUT");
+    if (!ok) return;
+    await refreshCarsContext?.();
     setEditingCar(null);
+    notify("Lưu thành công.", "success");
   };
 
   const handleCreateCustomer = async (e) => {
@@ -1356,7 +1876,7 @@ function Home({ adminMode = false, initialAbout = false }) {
       role: editingUser.role,
     }, "PUT");
     setEditingUser(null);
-    notify("Lưu người dùng thành công.", "success");
+    notify("Lưu nhân sự thành công.", "success");
   };
 
   const handleDeleteUser = async (userId) => {
@@ -1920,9 +2440,13 @@ function Home({ adminMode = false, initialAbout = false }) {
                       Năm sản xuất
                       <input type="number" value={newCar.year} onChange={(e) => setNewCar({ ...newCar, year: e.target.value })} />
                     </label>
-                    <label className="full-width">
+                    <label>
                       Mô tả
                       <textarea value={newCar.description} onChange={(e) => setNewCar({ ...newCar, description: e.target.value })} rows="3" />
+                    </label>
+                    <label className="car-image-field">
+                      Ảnh xe
+                      <input type="file" accept="image/*" onChange={(event) => handleCarImageChange(event, setNewCar)} />
                     </label>
                   </div>
                   <div className="user-edit-actions">
@@ -1986,9 +2510,20 @@ function Home({ adminMode = false, initialAbout = false }) {
                       Năm sản xuất
                       <input type="number" value={editingCar.year} onChange={(e) => setEditingCar({ ...editingCar, year: e.target.value })} />
                     </label>
-                    <label className="full-width">
+                    <label>
                       Mô tả
                       <textarea value={editingCar.description} onChange={(e) => setEditingCar({ ...editingCar, description: e.target.value })} rows="3" />
+                    </label>
+                    <label className="car-image-field">
+                      Ảnh xe
+                      <input type="file" accept="image/*" onChange={(event) => handleCarImageChange(event, setEditingCar)} />
+                      {editingCar.image_url ? (
+                        <a className="car-image-current" href={editingCar.image_url} target="_blank" rel="noreferrer">
+                          Xem ảnh hiện tại
+                        </a>
+                      ) : (
+                        <span className="car-image-current muted">Chưa có ảnh</span>
+                      )}
                     </label>
                   </div>
                   <div className="user-edit-actions">
@@ -2001,28 +2536,27 @@ function Home({ adminMode = false, initialAbout = false }) {
           ) : null}
           <table className="cars-table">
             <thead>
-              <tr>
-                <th>STT</th>
-                <th>ID</th>
-                <th>Tên</th>
-                <th>Hãng</th>
-                <th>Biển số</th>
-                <th>Giá/ngày</th>
-                <th>Trạng thái</th>
-                <th>Màu</th>
-                <th>Chỗ</th>
-                <th>Nhiên liệu</th>
-                <th>Hộp số</th>
-                <th>Năm</th>
-                <th>Mô tả</th>
-                <th>Thao tác</th>
+                <tr>
+                  <th>STT</th>
+                  <th>Tên</th>
+                  <th>Hãng</th>
+                  <th>Biển số</th>
+                  <th>Giá/ngày</th>
+                  <th>Trạng thái</th>
+                  <th>Màu</th>
+                  <th>Chỗ</th>
+                  <th>Nhiên liệu</th>
+                  <th>Hộp số</th>
+                  <th>Năm</th>
+                  <th>Mô tả</th>
+                  <th>Ảnh</th>
+                  <th>Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {pagedCars.map((car, index) => (
                 <tr key={car.car_id}>
                   <td>{(safeCarsPage - 1) * carsPerPage + index + 1}</td>
-                  <td>{car.car_id}</td>
                   <td>{car.name}</td>
                   <td>{car.brand}</td>
                   <td>{car.license_plate}</td>
@@ -2035,17 +2569,34 @@ function Home({ adminMode = false, initialAbout = false }) {
                   <td>{car.year || "-"}</td>
                   <td>{car.description || "-"}</td>
                   <td>
+                    {getCarImageUrl(car, fallbackCars) ? (
+                      <img className="cars-table-image" src={getCarImageUrl(car, fallbackCars)} alt={car.name || "Ảnh xe"} />
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td>
                     <div className="action-buttons">
-                      <button className="action-button" type="button" onClick={() => handleStartEditCar(car)}>Sửa</button>
-                      <button 
-                        className="action-button secondary" 
+                      <button
+                        className="table-icon-button"
                         type="button"
+                        title="Sửa"
+                        aria-label="Sửa"
+                        onClick={() => handleStartEditCar(car)}
+                      >
+                        <PaymentActionIcon type="edit" />
+                      </button>
+                      <button 
+                        className="table-icon-button danger" 
+                        type="button"
+                        title="Xóa"
+                        aria-label="Xóa"
                         onClick={() => {
                           console.log("Delete button clicked for car:", car.car_id);
                           handleAction(`${API_BASE_URL}/cars/${car.car_id}`, "DELETE");
                         }}
                       >
-                        Xóa
+                        <PaymentActionIcon type="trash" />
                       </button>
                     </div>
                   </td>
@@ -2068,7 +2619,21 @@ function Home({ adminMode = false, initialAbout = false }) {
               <button type="button" className="action-button secondary" disabled={safeCarsPage <= 1} onClick={() => setCarsPage((page) => Math.max(1, page - 1))}>
                 Trước
               </button>
-              <span>Trang {safeCarsPage} / {totalCarPages}</span>
+              <div className="table-page-numbers" aria-label="Chọn trang">
+                {getPaginationItems(safeCarsPage, totalCarPages).map((pageItem, index) => pageItem === "ellipsis" ? (
+                  <span key={`ellipsis-${index}`} className="table-page-ellipsis">...</span>
+                ) : (
+                  <button
+                    key={pageItem}
+                    type="button"
+                    className={`table-page-number ${pageItem === safeCarsPage ? "active" : ""}`}
+                    onClick={() => setCarsPage(pageItem)}
+                    aria-current={pageItem === safeCarsPage ? "page" : undefined}
+                  >
+                    {pageItem}
+                  </button>
+                ))}
+              </div>
               <button type="button" className="action-button" disabled={safeCarsPage >= totalCarPages} onClick={() => setCarsPage((page) => Math.min(totalCarPages, page + 1))}>
                 Sau
               </button>
@@ -2191,7 +2756,6 @@ function Home({ adminMode = false, initialAbout = false }) {
             <thead>
               <tr>
                 <th>STT</th>
-                <th>ID</th>
                 <th>Tên</th>
                 <th>Điện thoại</th>
                 <th>Email</th>
@@ -2204,7 +2768,6 @@ function Home({ adminMode = false, initialAbout = false }) {
               {pagedCustomers.map((customer, index) => (
                 <tr key={customer.customer_id}>
                   <td>{(safePage - 1) * 10 + index + 1}</td>
-                  <td>{customer.customer_id}</td>
                   <td>{customer.name}</td>
                   <td>{customer.phone}</td>
                   <td>{customer.email || "-"}</td>
@@ -2212,15 +2775,31 @@ function Home({ adminMode = false, initialAbout = false }) {
                   <td>{customer.address || "-"}</td>
                   <td>
                     <div className="action-buttons">
-                      <button className="action-button" type="button" onClick={() => handleStartEditCustomer(customer)}>Sửa</button>
-                      <button className="action-button secondary" type="button" onClick={() => handleAction(`${API_BASE_URL}/customers/${customer.customer_id}`, "DELETE")}>Xóa</button>
+                      <button
+                        className="table-icon-button"
+                        type="button"
+                        title="Sửa"
+                        aria-label="Sửa"
+                        onClick={() => handleStartEditCustomer(customer)}
+                      >
+                        <PaymentActionIcon type="edit" />
+                      </button>
+                      <button
+                        className="table-icon-button danger"
+                        type="button"
+                        title="Xóa"
+                        aria-label="Xóa"
+                        onClick={() => handleAction(`${API_BASE_URL}/customers/${customer.customer_id}`, "DELETE")}
+                      >
+                        <PaymentActionIcon type="trash" />
+                      </button>
                     </div>
                   </td>
                 </tr>
               ))}
               {pagedCustomers.length === 0 ? (
                 <tr>
-                  <td colSpan="8">Không có khách hàng nào.</td>
+                  <td colSpan="7">Không có khách hàng nào.</td>
                 </tr>
               ) : null}
             </tbody>
@@ -2238,13 +2817,17 @@ function Home({ adminMode = false, initialAbout = false }) {
     }
 
     if (activeTab === "requests") {
-      const filteredRequests = sortNewestByDate(
-        requests.filter((request) =>
-          isItemInDateRange(request, requestStartFilter, requestEndFilter)
-        ),
-        "start_date",
-        "request_id"
-      );
+      const formatRequestStatus = (status) => {
+        const normalized = String(status || "").trim().toLowerCase();
+        if (normalized === "pending") return "Chờ duyệt";
+        if (normalized === "approved") return "Đã duyệt";
+        if (normalized === "rejected") return "Đã từ chối";
+        if (normalized === "completed") return "Hoàn thành";
+        return status || "-";
+      };
+      const filteredRequests = [...requests]
+        .filter((request) => isItemInDateRange(request, requestStartFilter, requestEndFilter))
+        .sort((a, b) => Number(b?.request_id || 0) - Number(a?.request_id || 0));
       const { pageRows: pagedRequests, safePage, totalPages } = paginateRows(filteredRequests, requestsPage);
 
       return (
@@ -2296,15 +2879,27 @@ function Home({ adminMode = false, initialAbout = false }) {
                     <td>{req.pickup_location || "-"}</td>
                     <td>{req.start_date}</td>
                     <td>{req.end_date}</td>
-                    <td>{req.status}</td>
+                    <td>{formatRequestStatus(req.status)}</td>
                     <td>
                       {req.status === "pending" ? (
                         <div className="action-buttons">
-                          <button className="action-button" onClick={() => handleAction(`${API_BASE_URL}/rental_requests/${req.request_id}/approve`)}>
-                            Duyệt
+                          <button
+                            className="table-icon-button"
+                            type="button"
+                            title="Duyệt"
+                            aria-label="Duyệt"
+                            onClick={() => handleAction(`${API_BASE_URL}/rental_requests/${req.request_id}/approve`)}
+                          >
+                            <PaymentActionIcon type="check" />
                           </button>
-                          <button className="action-button secondary" onClick={() => handleAction(`${API_BASE_URL}/rental_requests/${req.request_id}/reject`)}>
-                            Từ chối
+                          <button
+                            className="table-icon-button danger"
+                            type="button"
+                            title="Từ chối"
+                            aria-label="Từ chối"
+                            onClick={() => handleAction(`${API_BASE_URL}/rental_requests/${req.request_id}/reject`)}
+                          >
+                            <PaymentActionIcon type="reject" />
                           </button>
                         </div>
                       ) : req.status === "approved" ? (
@@ -2326,7 +2921,7 @@ function Home({ adminMode = false, initialAbout = false }) {
                           );
                         })()
                       ) : (
-                        <span>Không hành động</span>
+                        <span>Từ chối</span>
                       )}
                     </td>
                   </tr>
@@ -2540,6 +3135,18 @@ function Home({ adminMode = false, initialAbout = false }) {
     }
 
     if (activeTab === "payments") {
+      const formatPaymentMethod = (method) => {
+        const normalized = String(method || "").trim().toLowerCase();
+        if (normalized === "cash") return "Tiền mặt";
+        if (normalized === "transfer") return "Chuyển khoản";
+        return method || "-";
+      };
+      const formatPaymentStatus = (status) => {
+        const normalized = String(status || "").trim().toLowerCase();
+        if (normalized === "paid") return "Đã thanh toán";
+        if (normalized === "unpaid") return "Chưa thanh toán";
+        return status || "-";
+      };
       const paymentCarOptions = [
         ...new Set(
           payments
@@ -2567,7 +3174,9 @@ function Home({ adminMode = false, initialAbout = false }) {
           car?.name,
           payment.amount,
           payment.method,
+          formatPaymentMethod(payment.method),
           payment.status,
+          formatPaymentStatus(payment.status),
         ].join(" ").toLowerCase();
         return searchable.includes(normalizedPaymentSearch);
       });
@@ -2622,7 +3231,7 @@ function Home({ adminMode = false, initialAbout = false }) {
               >
                 <option value="">Tất cả</option>
                 {paymentStatusOptions.map((status) => (
-                  <option key={status} value={status}>{status}</option>
+                  <option key={status} value={status}>{formatPaymentStatus(status)}</option>
                 ))}
               </select>
             </label>
@@ -2643,12 +3252,10 @@ function Home({ adminMode = false, initialAbout = false }) {
             <thead>
               <tr>
                 <th>STT</th>
-                <th>ID</th>
-                <th>ID hợp đồng</th>
                 <th>Khách hàng</th>
                 <th>Tên xe</th>
                 <th>Số tiền</th>
-                <th>Phương thức</th>
+                <th>Phương thức thanh toán</th>
                 <th>Trạng thái</th>
                 <th>Thao tác</th>
               </tr>
@@ -2661,28 +3268,40 @@ function Home({ adminMode = false, initialAbout = false }) {
                 return (
                   <tr key={payment.payment_id}>
                     <td>{(safePage - 1) * 10 + index + 1}</td>
-                    <td>{payment.payment_id}</td>
-                    <td>{payment.contract_id}</td>
                     <td>{customer?.name || "-"}</td>
                     <td>{car?.name || "-"}</td>
                     <td>{Number(payment.amount || 0).toLocaleString("vi-VN")}</td>
-                    <td>{payment.method}</td>
-                    <td>{payment.status}</td>
+                    <td>{formatPaymentMethod(payment.method)}</td>
+                    <td>{formatPaymentStatus(payment.status)}</td>
                     <td>
-                      {payment.status === "unpaid" ? (
-                        <button className="action-button" onClick={() => handleAction(`${API_BASE_URL}/payments/${payment.payment_id}/pay`)}>
-                          Thanh toán
+                      <div className="table-icon-actions">
+                        <button
+                          className="table-icon-button"
+                          type="button"
+                          title="Thanh toán"
+                          aria-label="Thanh toán"
+                          disabled={payment.status === "paid"}
+                          onClick={() => handleAction(`${API_BASE_URL}/payments/${payment.payment_id}/pay`)}
+                        >
+                          <PaymentActionIcon type="money" />
                         </button>
-                      ) : (
-                        <span>Đã thanh toán</span>
-                      )}
+                        <button
+                          className="table-icon-button danger"
+                          type="button"
+                          title="Xóa"
+                          aria-label="Xóa"
+                          onClick={() => handleAction(`${API_BASE_URL}/payments/${payment.payment_id}`, "DELETE")}
+                        >
+                          <PaymentActionIcon type="trash" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
               })}
               {pagedPayments.length === 0 ? (
                 <tr>
-                  <td colSpan="9">Không có thanh toán nào.</td>
+                  <td colSpan="7">Không có thanh toán nào.</td>
                 </tr>
               ) : null}
             </tbody>
@@ -2700,6 +3319,7 @@ function Home({ adminMode = false, initialAbout = false }) {
     }
 
     if (activeTab === "users") {
+      const canManagePersonnel = isAdmin;
       const userRoleOptions = [...new Set(dashboardUsers.map((user) => user.role).filter(Boolean))]
         .sort((a, b) => String(a).localeCompare(String(b), "vi"));
       const normalizedUserSearch = userSearch.trim().toLowerCase();
@@ -2716,7 +3336,7 @@ function Home({ adminMode = false, initialAbout = false }) {
       return (
         <div className="table-section">
           <div className="table-heading-row">
-            <h3>Danh sách người dùng</h3>
+            <h3>Danh sách nhân sự</h3>
             <div className="user-table-actions">
               <input
                 className="table-search-input"
@@ -2728,9 +3348,11 @@ function Home({ adminMode = false, initialAbout = false }) {
                 }}
                 placeholder="Tìm tên hoặc email..."
               />
-              <button type="button" className="action-button table-create-button" onClick={() => setShowCreateUserForm(true)}>
-                Tạo người dùng
-              </button>
+              {canManagePersonnel ? (
+                <button type="button" className="action-button table-create-button" onClick={() => setShowCreateUserForm(true)}>
+                  Tạo nhân sự
+                </button>
+              ) : null}
             </div>
           </div>
           <div className="user-filter-grid">
@@ -2761,13 +3383,13 @@ function Home({ adminMode = false, initialAbout = false }) {
               Xóa lọc
             </button>
           </div>
-          {showCreateUserForm ? (
+          {canManagePersonnel && showCreateUserForm ? (
             <>
               <div className="modal-overlay" onClick={() => setShowCreateUserForm(false)} />
               <div className="user-edit-modal">
                 <form className="user-edit-card" onSubmit={handleCreateUser}>
                   <div className="user-edit-header">
-                    <h3>Tạo người dùng</h3>
+                    <h3>Tạo nhân sự</h3>
                     <button type="button" className="modal-close" onClick={() => setShowCreateUserForm(false)}>×</button>
                   </div>
                   <div className="user-edit-grid">
@@ -2799,13 +3421,13 @@ function Home({ adminMode = false, initialAbout = false }) {
               </div>
             </>
           ) : null}
-          {editingUser ? (
+          {canManagePersonnel && editingUser ? (
             <>
               <div className="modal-overlay" onClick={() => setEditingUser(null)} />
               <div className="user-edit-modal">
                 <form className="user-edit-card" onSubmit={handleUpdateUser}>
                   <div className="user-edit-header">
-                    <h3>Sửa người dùng</h3>
+                    <h3>Sửa nhân sự</h3>
                     <button type="button" className="modal-close" onClick={() => setEditingUser(null)}>×</button>
                   </div>
                   <div className="user-edit-grid">
@@ -2841,7 +3463,6 @@ function Home({ adminMode = false, initialAbout = false }) {
             <thead>
               <tr>
                 <th>STT</th>
-                <th>ID</th>
                 <th>Tên</th>
                 <th>Email</th>
                 <th>Password</th>
@@ -2853,22 +3474,41 @@ function Home({ adminMode = false, initialAbout = false }) {
               {pagedUsers.map((user, index) => (
                 <tr key={user.user_id}>
                   <td>{(safePage - 1) * 10 + index + 1}</td>
-                  <td>{user.user_id}</td>
                   <td>{user.name || "-"}</td>
                   <td>{user.username}</td>
                   <td>{user.password ? "•".repeat(Math.min(String(user.password).length, 12)) : "-"}</td>
                   <td>{user.role}</td>
                   <td>
-                    <div className="action-buttons">
-                      <button className="action-button" type="button" onClick={() => handleStartEditUser(user)}>Sửa</button>
-                      <button className="action-button secondary" type="button" onClick={() => handleDeleteUser(user.user_id)}>Xóa</button>
-                    </div>
+                    {canManagePersonnel ? (
+                      <div className="action-buttons">
+                        <button
+                          className="table-icon-button"
+                          type="button"
+                          title="Sửa"
+                          aria-label="Sửa"
+                          onClick={() => handleStartEditUser(user)}
+                        >
+                          <PaymentActionIcon type="edit" />
+                        </button>
+                        <button
+                          className="table-icon-button danger"
+                          type="button"
+                          title="Xóa"
+                          aria-label="Xóa"
+                          onClick={() => handleDeleteUser(user.user_id)}
+                        >
+                          <PaymentActionIcon type="trash" />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="readonly-note">Chỉ xem</span>
+                    )}
                   </td>
                 </tr>
               ))}
               {pagedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan="7">Không có người dùng nào.</td>
+                  <td colSpan="6">Không có nhân sự nào.</td>
                 </tr>
               ) : null}
             </tbody>
@@ -2879,7 +3519,7 @@ function Home({ adminMode = false, initialAbout = false }) {
             safePage,
             totalPages,
             setPage: setUsersPage,
-            itemLabel: "người dùng",
+            itemLabel: "nhân sự",
           })}
         </div>
       );
@@ -2901,7 +3541,7 @@ function Home({ adminMode = false, initialAbout = false }) {
 
         <div className="about-services-grid">
           <article className="about-service-card">
-            <span className="about-service-icon">🏢</span>
+            <HomeSectionIcon type="enterprise" className="about-service-icon" />
             <h3>Đưa đón cán bộ, nhân viên</h3>
             <p>
               Dịch vụ được các doanh nghiệp lựa chọn để đưa đón lãnh đạo, chuyên gia nước ngoài và
@@ -2910,7 +3550,7 @@ function Home({ adminMode = false, initialAbout = false }) {
             </p>
           </article>
           <article className="about-service-card">
-            <span className="about-service-icon">✈️</span>
+            <HomeSectionIcon type="airport" className="about-service-icon" />
             <h3>Du lịch &amp; công tác theo chuyến</h3>
             <p>
               Thuê xe chuyến lẻ (tự lái hoặc có lái) khi không cần tần suất cao: du lịch, công tác,
@@ -2918,7 +3558,7 @@ function Home({ adminMode = false, initialAbout = false }) {
             </p>
           </article>
           <article className="about-service-card">
-            <span className="about-service-icon">🎬</span>
+            <HomeSectionIcon type="customService" className="about-service-icon" />
             <h3>Dịch vụ xe theo yêu cầu</h3>
             <p>
               Cho thuê xe cưới, quay phim, chụp mẫu, trưng bày triển lãm… Liên hệ trực tiếp để được
@@ -2929,6 +3569,7 @@ function Home({ adminMode = false, initialAbout = false }) {
 
         <div className="about-split">
           <article className="about-panel">
+            <HomeSectionIcon type="history" className="about-panel-icon" />
             <h3>Lịch sử phát triển</h3>
             <p>
               Công ty được thành lập ngày 22/5/2017 với dịch vụ vận tải hành khách – cho thuê ô tô theo
@@ -2937,6 +3578,7 @@ function Home({ adminMode = false, initialAbout = false }) {
             </p>
           </article>
           <article className="about-panel">
+            <HomeSectionIcon type="mission" className="about-panel-icon" />
             <h3>Tầm nhìn &amp; sứ mệnh</h3>
             <p>
               Trở thành người bạn đồng hành đáng tin cậy mà khách hàng nghĩ tới đầu tiên cho mỗi chuyến đi.
@@ -2984,14 +3626,17 @@ function Home({ adminMode = false, initialAbout = false }) {
 
         <div className="about-highlights">
           <div className="about-highlight">
+            <HomeSectionIcon type="gps" className="about-highlight-icon" />
             <strong>GPS &amp; giám sát</strong>
             <span>Kiểm soát vị trí, tình trạng xe và hỗ trợ kịp thời</span>
           </div>
           <div className="about-highlight">
+            <HomeSectionIcon type="fuel" className="about-highlight-icon" />
             <strong>Quản lý nhiên liệu</strong>
             <span>Mua xăng dầu qua thẻ, vận hành minh bạch</span>
           </div>
           <div className="about-highlight">
+            <HomeSectionIcon type="team" className="about-highlight-icon" />
             <strong>Đội ngũ</strong>
             <span>CSKH tận tâm, nhân sự văn phòng đúng chuyên ngành</span>
           </div>
@@ -3113,14 +3758,14 @@ function Home({ adminMode = false, initialAbout = false }) {
       <header className={`header${showLoginForm ? " header-auth-open" : ""}${isHeaderHidden && !showServiceOptions && !showLoginForm ? " header-hidden" : ""}`}>
         <div className="header-container">
           <button className="logo" type="button" onClick={() => navigate('/')}>
-            <span className="logo-icon">PDC</span>
+            <span className="logo-icon"><img src="/image/brand/logo.png" alt="Phương Đông" /></span>
             <div className="logo-text">
               <p className="logo-main">Dịch vụ cho thuê xe linh hoạt</p>
             </div>
           </button>
 
           <nav className="nav">
-            {role === 'admin' && loggedInUser ? (
+            {canAccessDashboard && loggedInUser ? (
               <>
                 <button className="nav-item" onClick={() => navigate('/')}>Trang chủ</button>
                 <button className="nav-item" onClick={() => navigate('/admin')}>Dashboard</button>
@@ -3158,6 +3803,66 @@ function Home({ adminMode = false, initialAbout = false }) {
 
           <div className="login-controls">
             {loggedInUser ? (
+              <>
+              <div className="notification-container">
+                <button
+                  type="button"
+                  className={`notification-bell ${unreadNotificationCount > 0 ? "has-unread" : ""}`}
+                  aria-label="Thông báo"
+                  title="Thông báo"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setShowNotifications((prev) => !prev);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                    <path d="M10 21h4" />
+                  </svg>
+                  {unreadNotificationCount > 0 ? (
+                    <span className="notification-count">{unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}</span>
+                  ) : null}
+                </button>
+                {showNotifications ? (
+                  <div className="notification-dropdown">
+                    <div className="notification-dropdown-header">
+                      <strong>Thông báo</strong>
+                      <span>{unreadNotificationCount > 0 ? `${unreadNotificationCount} mới` : "Đã đọc"}</span>
+                    </div>
+                    <div className="notification-list">
+                      {notifications.length > 0 ? (
+                        notifications.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className={`notification-item ${item.read ? "" : "unread"}`}
+                            onClick={() => {
+                              markNotificationRead(item.id);
+                              setShowNotifications(false);
+                              if (canAccessDashboard) {
+                                refreshData();
+                                navigate("/admin");
+                                setActiveTab("requests");
+                              } else {
+                                navigate("/my-rentals");
+                              }
+                            }}
+                          >
+                            <span className="notification-dot" />
+                            <span>
+                              <strong>{item.title}</strong>
+                              <small>{item.message}</small>
+                              <em>{formatNotificationTime(item.createdAt)}</em>
+                            </span>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="notification-empty">Chưa có thông báo mới.</div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
               <div className="user-menu-container">
                 <button 
                   className="user-avatar-btn" 
@@ -3177,7 +3882,7 @@ function Home({ adminMode = false, initialAbout = false }) {
                         <div className="user-avatar-large">👤</div>
                         <div>
                           <div className="user-display-name">{loggedInUser}</div>
-                          <div className="user-role">Vai trò: {role === 'admin' ? 'Quản trị viên' : role === 'staff' ? 'Nhân viên' : 'Khách hàng'}</div>
+                          <div className="user-role">Vai trò: {normalizedRole === 'admin' ? 'Quản trị viên' : normalizedRole === 'staff' ? 'Nhân viên' : 'Khách hàng'}</div>
                         </div>
                       </div>
                     </div>
@@ -3189,7 +3894,7 @@ function Home({ adminMode = false, initialAbout = false }) {
                         <span>👤</span>
                         Thông tin cá nhân
                       </button>
-                      {role === 'admin' || role === 'staff' ? (
+                      {canAccessDashboard ? (
                         <button className="dropdown-item" onClick={() => {
                           navigate('/admin');
                           setShowUserMenu(false);
@@ -3207,6 +3912,7 @@ function Home({ adminMode = false, initialAbout = false }) {
                   </div>
                 )}
               </div>
+              </>
             ) : (
               <>
                 <button className="login-btn" onClick={handleLoginClick}>Đăng nhập</button>
@@ -3404,7 +4110,7 @@ function Home({ adminMode = false, initialAbout = false }) {
 
       {/* DASHBOARD SECTION */}
       {adminMode && (
-        (role === "admin" || role === "staff") ? (
+        canAccessDashboard ? (
           <section className="dashboard">
           <div className="dashboard-container">
             <div className="dashboard-layout">
@@ -3418,7 +4124,7 @@ function Home({ adminMode = false, initialAbout = false }) {
                     { key: "requests", label: "Yêu cầu" },
                     { key: "contracts", label: "Hợp đồng" },
                     { key: "payments", label: "Thanh toán" },
-                    { key: "users", label: "Người dùng" },
+                    ...(isAdmin ? [{ key: "users", label: "Nhân sự" }] : []),
                   ].map((tab) => (
                     <button
                       key={tab.key}
@@ -3452,22 +4158,22 @@ function Home({ adminMode = false, initialAbout = false }) {
           <h2 className="section-title">Dịch vụ của chúng tôi</h2>
           <div className="services-grid">
             <div className={`service-card ${selectedRentalType === "tự lái" ? "active" : ""}`}>
-              <div className="service-icon">🚗</div>
+              <HomeSectionIcon type="selfDrive" className="service-icon" />
               <h3>Thuê xe tự lái</h3>
               <p>Chủ động hành trình, đa dạng dòng xe từ phổ thông đến cao cấp</p>
             </div>
             <div className={`service-card ${selectedRentalType === "có lái" ? "active" : ""}`}>
-              <div className="service-icon">👨‍💼</div>
+              <HomeSectionIcon type="chauffeur" className="service-icon" />
               <h3>Thuê xe có lái</h3>
               <p>Tài xế giàu kinh nghiệm, an toàn và thoải mái trên mọi chuyến đi</p>
             </div>
             <div className="service-card">
-              <div className="service-icon">🏭</div>
+              <HomeSectionIcon type="enterprise" className="service-icon" />
               <h3>Đưa đón doanh nghiệp</h3>
               <p>Phục vụ nhân viên, chuyên gia tại khu công nghiệp theo tháng hoặc dài hạn</p>
             </div>
             <div className="service-card">
-              <div className="service-icon">🛣️</div>
+              <HomeSectionIcon type="route" className="service-icon" />
               <h3>Chuyến lẻ &amp; dự án</h3>
               <p>Du lịch, công tác, sân bay và xe phục vụ dự án theo yêu cầu</p>
             </div>
@@ -3510,22 +4216,22 @@ function Home({ adminMode = false, initialAbout = false }) {
           </p>
           <div className="fleet-grid">
             <div className="fleet-card">
-              <div className="fleet-image">🚗</div>
+              <HomeSectionIcon type="sedan" className="fleet-image" />
               <h3>Toyota Camry / Vios</h3>
               <p>Sedan cao cấp &amp; tiết kiệm — công tác, sân bay, nội thành</p>
             </div>
             <div className="fleet-card">
-              <div className="fleet-image">🚐</div>
+              <HomeSectionIcon type="van" className="fleet-image" />
               <h3>Kia Sedona / Carnival</h3>
               <p>7 chỗ rộng rãi — đưa đón sếp, chuyên gia, du lịch</p>
             </div>
             <div className="fleet-card">
-              <div className="fleet-image">🛋️</div>
+              <HomeSectionIcon type="limousine" className="fleet-image" />
               <h3>Dcar / Limousine</h3>
               <p>Sang trọng, thoải mái — du lịch công ty, gia đình</p>
             </div>
             <div className="fleet-card">
-              <div className="fleet-image">🚌</div>
+              <HomeSectionIcon type="bus" className="fleet-image" />
               <h3>Transit / Universe / Aero</h3>
               <p>16–45 chỗ — du lịch, đưa đón nhân viên doanh nghiệp</p>
             </div>
@@ -3543,9 +4249,10 @@ function Home({ adminMode = false, initialAbout = false }) {
               <div className="submitted-reviews-grid">
                 {customerReviews.map((review) => (
                   <article className="testimonial-card submitted-review-card" key={review.id}>
+                    <HomeSectionIcon type="quote" className="testimonial-icon" />
                     <p>"{review.message}"</p>
                     <h4>{review.name}</h4>
-                    <span>{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}</span>
+                    <RatingRow rating={review.rating} />
                   </article>
                 ))}
               </div>
@@ -3553,19 +4260,22 @@ function Home({ adminMode = false, initialAbout = false }) {
           ) : null}
           <div className="testimonials-grid">
             <div className="testimonial-card">
+              <HomeSectionIcon type="quote" className="testimonial-icon" />
               <p>"Dịch vụ rất tuyệt vời, xe mới, giá hợp lý. Sẽ thuê lại!"</p>
               <h4>Nguyễn Văn A</h4>
-              <span>⭐⭐⭐⭐⭐</span>
+              <RatingRow rating={5} />
             </div>
             <div className="testimonial-card">
+              <HomeSectionIcon type="quote" className="testimonial-icon" />
               <p>"Tài xế chuyên nghiệp, xe sạch sẽ, thoải mái cho chuyến đi"</p>
               <h4>Trần Thị B</h4>
-              <span>⭐⭐⭐⭐⭐</span>
+              <RatingRow rating={5} />
             </div>
             <div className="testimonial-card">
+              <HomeSectionIcon type="quote" className="testimonial-icon" />
               <p>"Quá tuyệt vời, từ đặt lịch đến giao xe rất nhanh chóng"</p>
               <h4>Phạm Văn C</h4>
-              <span>⭐⭐⭐⭐⭐</span>
+              <RatingRow rating={5} />
             </div>
           </div>
         </div>
@@ -3578,15 +4288,15 @@ function Home({ adminMode = false, initialAbout = false }) {
           <div className="contact-content">
             <div className="contact-info">
               <div className="contact-item">
-                <h3>⭐ Chia sẻ trải nghiệm</h3>
+                <h3><HomeSectionIcon type="review" className="contact-icon" /> Chia sẻ trải nghiệm</h3>
                 <p>Đánh giá của bạn sẽ được hiển thị trong phần cảm nhận khách hàng.</p>
               </div>
               <div className="contact-item">
-                <h3>👤 Tài khoản</h3>
+                <h3><HomeSectionIcon type="account" className="contact-icon" /> Tài khoản</h3>
                 <p>{loggedInUser ? `Bạn đang đăng nhập với tên ${loggedInUser}.` : "Bạn cần đăng nhập trước khi gửi đánh giá."}</p>
               </div>
               <div className="contact-item">
-                <h3>📞 Hỗ trợ</h3>
+                <h3><HomeSectionIcon type="support" className="contact-icon" /> Hỗ trợ</h3>
                 <p>0566 999 666 / 0979 402 470</p>
               </div>
             </div>

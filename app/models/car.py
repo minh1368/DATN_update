@@ -18,3 +18,4 @@ class Car(Base):
     transmission = Column(String)  # số sàn/tự động
     year = Column(Integer)
     description = Column(String)
+    image_url = Column(String)

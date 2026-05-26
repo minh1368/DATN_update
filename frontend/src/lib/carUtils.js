@@ -35,7 +35,13 @@ export function selfDriveDetailPath(car) {
 export function normalizeImageUrl(url) {
   if (!url) return "";
   const trimmedUrl = String(url).trim();
-  if (trimmedUrl.startsWith("/") || trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")) {
+  if (
+    trimmedUrl.startsWith("/") ||
+    trimmedUrl.startsWith("http://") ||
+    trimmedUrl.startsWith("https://") ||
+    trimmedUrl.startsWith("data:image/") ||
+    trimmedUrl.startsWith("blob:")
+  ) {
     return trimmedUrl;
   }
   return `/${trimmedUrl}`;

@@ -30,8 +30,8 @@ def create_request(req: RentalRequestCreate, db: Session = Depends(get_db), user
     if car.status != "available":
         raise HTTPException(status_code=400, detail="Xe hiện không khả dụng")
 
-    if req.start_date >= req.end_date:
-        raise HTTPException(status_code=400, detail="Ngày bắt đầu phải trước ngày kết thúc")
+    if req.start_date > req.end_date:
+        raise HTTPException(status_code=400, detail="Ngày kết thúc không được trước ngày bắt đầu")
 
     if has_overlapping_booking(db, req.car_id, req.start_date, req.end_date):
         raise HTTPException(status_code=400, detail="Xe đã có lịch thuê trong khoảng thời gian này")
@@ -52,8 +52,8 @@ def create_customer_request(req: RentalRequestCreate, db: Session = Depends(get_
     if car.status != "available":
         raise HTTPException(status_code=400, detail="Xe hiện không khả dụng")
 
-    if req.start_date >= req.end_date:
-        raise HTTPException(status_code=400, detail="Ngày bắt đầu phải trước ngày kết thúc")
+    if req.start_date > req.end_date:
+        raise HTTPException(status_code=400, detail="Ngày kết thúc không được trước ngày bắt đầu")
 
     if has_overlapping_booking(db, req.car_id, req.start_date, req.end_date):
         raise HTTPException(status_code=400, detail="Xe đã có lịch thuê trong khoảng thời gian này")

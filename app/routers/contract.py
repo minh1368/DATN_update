@@ -52,7 +52,7 @@ def create_contract(request_id: int, db: Session = Depends(get_db), user: dict =
     if has_overlapping_booking(db, req.car_id, req.start_date, req.end_date, exclude_request_id=req.request_id):
         raise HTTPException(status_code=400, detail="Xe đã có lịch thuê trong khoảng thời gian này")
 
-    days = (req.end_date - req.start_date).days
+    days = (req.end_date - req.start_date).days + 1
     if days <= 0:
         raise HTTPException(status_code=400, detail="Ngày không hợp lệ")
 

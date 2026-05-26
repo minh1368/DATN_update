@@ -69,14 +69,14 @@ function AppFooter() {
       <div className="app-footer-inner">
         <div className="app-footer-brand">
           <div className="app-footer-logo">
-            <span className="logo-icon footer-header-logo">PDC</span>
+            <span className="logo-icon footer-header-logo"><img src="/image/brand/logo.png" alt="Phương Đông" /></span>
             <span className="footer-logo-divider" />
             <span className="footer-logo-text">Dịch vụ<br />cho thuê xe<br />linh hoạt</span>
           </div>
 
           <div className="app-footer-company">
             <h2>Công ty Cổ phần TĐ Phương Đông</h2>
-            <p>MST/MSDN: 0110942941 do Sở Tài chính TP Hà Nội cấp lần 13 ngày 24/02/2026</p>
+            <p>MST/MSDN: 0110942941 do Sở Tài chính TP Hà Nội cấp ngày 24/02/2025</p>
             <p>Địa chỉ: 39 Phan Phù Tiên, phường Ô Chợ Dừa, Hà Nội, Việt Nam</p>
           </div>
 

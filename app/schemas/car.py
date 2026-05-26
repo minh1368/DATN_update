@@ -15,6 +15,7 @@ class CarCreate(BaseModel):
     transmission: Optional[str] = None
     year: Optional[int] = None
     description: Optional[str] = None
+    image_url: Optional[str] = None
 
 class CarResponse(CarCreate):
     car_id: int

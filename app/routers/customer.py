@@ -8,6 +8,7 @@ from app.models.customer import Customer
 from app.models.contract import Contract
 from app.models.user import User
 from app.schemas.customer import CustomerCreate, CustomerResponse
+from app.security import hash_password, is_password_hash
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
 
@@ -29,6 +30,36 @@ def ensure_unique_customer_email(db: Session, email: str | None, customer_id: in
         query = query.filter(Customer.customer_id != customer_id)
     if query.first():
         raise HTTPException(status_code=400, detail="Email da duoc su dung")
+
+
+def sync_customer_user(db: Session, customer: Customer, password: str | None = None):
+    email = normalize_email(customer.email)
+    if not email:
+        return
+
+    user = db.query(User).filter(User.username.ilike(email)).first()
+    raw_password = password or customer.password or ""
+    user_password = hash_password(raw_password) if raw_password and not is_password_hash(raw_password) else raw_password
+
+    if user:
+        if user.role != "customer":
+            raise HTTPException(status_code=400, detail="Email da duoc su dung boi tai khoan quan tri/nhan vien")
+        user.name = customer.name
+        user.username = email
+        if user_password:
+            user.password = user_password
+        user.role = "customer"
+        return
+
+    if not raw_password:
+        return
+
+    db.add(User(
+        name=customer.name,
+        username=email,
+        password=user_password,
+        role="customer",
+    ))
 
 
 @router.get("/", response_model=List[CustomerResponse])
@@ -72,6 +103,8 @@ def create_customer(customer: CustomerCreate, db: Session = Depends(get_db), use
     db.add(new_customer)
 
     try:
+        db.flush()
+        sync_customer_user(db, new_customer, data.get("password"))
         db.commit()
         db.refresh(new_customer)
     except IntegrityError:
@@ -94,6 +127,8 @@ def create_customer_public(customer: CustomerCreate, db: Session = Depends(get_d
     db.add(new_customer)
 
     try:
+        db.flush()
+        sync_customer_user(db, new_customer, data.get("password"))
         db.commit()
         db.refresh(new_customer)
     except IntegrityError:
@@ -122,6 +157,7 @@ def update_customer_profile(customer_id: int, customer_data: CustomerCreate, db:
         setattr(customer, field, value)
 
     try:
+        sync_customer_user(db, customer, data.get("password"))
         db.commit()
         db.refresh(customer)
     except IntegrityError:
@@ -150,6 +186,7 @@ def update_customer(customer_id: int, customer_data: CustomerCreate, db: Session
         setattr(customer, field, value)
 
     try:
+        sync_customer_user(db, customer, data.get("password"))
         db.commit()
         db.refresh(customer)
     except IntegrityError:

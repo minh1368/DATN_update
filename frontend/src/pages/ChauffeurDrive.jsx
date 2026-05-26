@@ -34,7 +34,7 @@ export default function ChauffeurDrivePage() {
       <header className="gf-header">
         <div className="gf-header-inner">
           <Link to="/" className="gf-brand">
-            <span className="logo-icon">PDC</span>
+            <span className="logo-icon"><img src="/image/brand/logo.png" alt="Phương Đông" /></span>
             <span className="gf-brand-text">Thuê xe</span>
           </Link>
           <nav className="gf-nav">
@@ -104,7 +104,7 @@ export default function ChauffeurDrivePage() {
           </div>
           <div className="chauffeur-image-card">
             <img
-              src="https://images.unsplash.com/photo-1549924231-f129b911e442?auto=format&fit=crop&w=1200&q=80"
+              src="https://dynamic-media-cdn.tripadvisor.com/media/photo-o/29/07/b0/4b/trong-nh-la-chi-c-xe.jpg?w=900&h=500&s=1"
               alt="Xe có lái phục vụ doanh nghiệp"
             />
           </div>
