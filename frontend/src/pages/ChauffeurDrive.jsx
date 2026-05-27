@@ -22,10 +22,10 @@ const benefits = [
 ];
 
 const vehicleGroups = [
-  "Xe 4-5 chỗ: sedan phục vụ lãnh đạo, chuyên gia, công tác nội thành.",
-  "Xe 7 chỗ: phù hợp nhóm nhỏ, đón sân bay, đi tỉnh hoặc lịch trình linh hoạt.",
-  "Xe 16 chỗ: đưa đón nhân viên theo tuyến, đoàn công tác, sự kiện doanh nghiệp.",
-  "Xe 29-45 chỗ: phục vụ nhà máy, khu công nghiệp, hội nghị, du lịch công ty.",
+  "Xe 4-5 chỗ: Sedan phục vụ lãnh đạo, chuyên gia, công tác nội thành.",
+  "Xe 7 chỗ: Phù hợp nhóm nhỏ, đón sân bay, đi tỉnh hoặc lịch trình linh hoạt.",
+  "Xe 16 chỗ: Đưa đón nhân viên theo tuyến, đoàn công tác, sự kiện doanh nghiệp.",
+  "Xe 29-45 chỗ: Phục vụ nhà máy, khu công nghiệp, hội nghị, du lịch công ty.",
 ];
 
 export default function ChauffeurDrivePage() {

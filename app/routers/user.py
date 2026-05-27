@@ -27,13 +27,13 @@ def user_response(user: User) -> UserResponse:
 
 def ensure_unique_username(db: Session, username: str):
     if db.query(User).filter(User.username.ilike(username)).first():
-        raise HTTPException(status_code=400, detail="Email da duoc su dung")
+        raise HTTPException(status_code=400, detail="Email đã được sử dụng")
 
 
 def ensure_unique_username_for_update(db: Session, username: str, user_id: int):
     existing = db.query(User).filter(User.username.ilike(username), User.user_id != user_id).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Email da duoc su dung")
+        raise HTTPException(status_code=400, detail="Email đã được sử dụng")
 
 
 @router.get("/", response_model=List[UserResponse])
@@ -56,7 +56,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db), admin: dict = D
         db.refresh(new_user)
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Username da ton tai")
+        raise HTTPException(status_code=400, detail="Username đã tồn tại")
 
     return user_response(new_user)
 
@@ -73,7 +73,7 @@ def register_user(user: UserRegister, db: Session = Depends(get_db)):
         db.refresh(new_user)
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Username da ton tai")
+        raise HTTPException(status_code=400, detail="Username đã tồn tại")
 
     return user_response(new_user)
 
@@ -82,7 +82,7 @@ def register_user(user: UserRegister, db: Session = Depends(get_db)):
 def update_user(user_id: int, user: UserCreate, db: Session = Depends(get_db), admin: dict = Depends(require_admin)):
     existing_user = db.query(User).filter(User.user_id == user_id).first()
     if not existing_user:
-        raise HTTPException(status_code=404, detail="Nguoi dung khong ton tai")
+        raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
 
     username = normalize_username(user.username)
     ensure_unique_username_for_update(db, username, user_id)
@@ -107,7 +107,7 @@ def update_user(user_id: int, user: UserCreate, db: Session = Depends(get_db), a
 def delete_user(user_id: int, db: Session = Depends(get_db), admin: dict = Depends(require_admin)):
     existing_user = db.query(User).filter(User.user_id == user_id).first()
     if not existing_user:
-        raise HTTPException(status_code=404, detail="Nguoi dung khong ton tai")
+        raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
 
     db.delete(existing_user)
     db.commit()
@@ -119,6 +119,6 @@ def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
     username = normalize_username(credentials.username)
     user = db.query(User).filter(User.username.ilike(username)).first()
     if not user or not verify_password(credentials.password, user.password):
-        raise HTTPException(status_code=401, detail="Tai khoan hoac mat khau sai")
+        raise HTTPException(status_code=401, detail="Tài khoản hoặc mật khẩu sai")
 
     return user_response(user)

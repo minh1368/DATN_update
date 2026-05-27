@@ -224,7 +224,7 @@ export default function SelfDriveDetailPage() {
       setShowLoginForm(false);
       setLoginData({ username: "", password: "" });
       setShowBookingForm(true);
-      notifyUser("Đăng nhập thành công. Bạn có thể đặt xe.", "success");
+      notifyUser("Đăng nhập thành công", "success");
     } catch (error) {
       setLoginError(getReadableErrorMessage(error, "Đăng nhập thất bại"));
     }

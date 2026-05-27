@@ -2,9 +2,8 @@ import { Link } from "react-router-dom";
 
 const footerLinks = {
   booking: [
-    { label: "Ngắn hạn", to: "/thue-xe-tu-lai" },
-    { label: "Dài hạn", to: "/thue-xe-co-lai" },
-    { label: "Doanh nghiệp", to: "/thue-xe-co-lai" },
+    { label: "Thuê xe tự lái", to: "/thue-xe-tu-lai" },
+    { label: "Thuê xe có lái", to: "/thue-xe-co-lai" },
   ],
   about: [
     { label: "Về chúng tôi", to: "/gioi-thieu" },
@@ -86,8 +85,8 @@ function AppFooter() {
           </div>
         </div>
 
-        <nav className="app-footer-column" aria-label="Đặt xe">
-          <h3>Đặt xe</h3>
+        <nav className="app-footer-column" aria-label="Thuê xe">
+          <h3>Thuê xe</h3>
           {footerLinks.booking.map((item) => (
             <Link key={item.label} to={item.to}>{item.label}</Link>
           ))}

@@ -1,4 +1,5 @@
 import os
+from datetime import date
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -66,6 +67,10 @@ if engine.dialect.name == "postgresql":
 from app.database import SessionLocal
 from app.models.user import User
 from app.models.customer import Customer
+from app.models.car import Car
+from app.models.rental_request import RentalRequest
+from app.models.contract import Contract
+from app.models.payment import Payment
 from app.security import hash_password, is_password_hash
 
 SAMPLE_CUSTOMERS = [
@@ -134,6 +139,121 @@ def ensure_sample_customers(session):
                 user.password = hash_password(data["password"])
 
 
+SAMPLE_RENTAL_HISTORY = [
+    {"customer_email": "khachhang01@phuongdong.vn", "car_name": "Toyota Vios", "start": date(2025, 1, 5), "end": date(2025, 1, 7), "pickup": "Ba Dinh, Ha Noi"},
+    {"customer_email": "khachhang02@phuongdong.vn", "car_name": "VinFast VF 3", "start": date(2025, 2, 10), "end": date(2025, 2, 12), "pickup": "Hoan Kiem, Ha Noi"},
+    {"customer_email": "khachhang03@phuongdong.vn", "car_name": "Mazda 3", "start": date(2025, 3, 3), "end": date(2025, 3, 6), "pickup": "Dong Da, Ha Noi"},
+    {"customer_email": "khachhang04@phuongdong.vn", "car_name": "Hyundai Accent", "start": date(2025, 3, 21), "end": date(2025, 3, 22), "pickup": "Cau Giay, Ha Noi"},
+    {"customer_email": "khachhang05@phuongdong.vn", "car_name": "Toyota Innova", "start": date(2025, 4, 8), "end": date(2025, 4, 11), "pickup": "Thanh Xuan, Ha Noi"},
+    {"customer_email": "khachhang06@phuongdong.vn", "car_name": "VinFast VF 5", "start": date(2025, 5, 13), "end": date(2025, 5, 15), "pickup": "Hai Ba Trung, Ha Noi"},
+    {"customer_email": "khachhang07@phuongdong.vn", "car_name": "Kia Seltos", "start": date(2025, 6, 2), "end": date(2025, 6, 8), "pickup": "Long Bien, Ha Noi"},
+    {"customer_email": "khachhang08@phuongdong.vn", "car_name": "Mazda CX-5", "start": date(2025, 6, 25), "end": date(2025, 6, 27), "pickup": "Tay Ho, Ha Noi"},
+    {"customer_email": "khachhang09@phuongdong.vn", "car_name": "VinFast VF 6", "start": date(2025, 7, 10), "end": date(2025, 7, 14), "pickup": "Nam Tu Liem, Ha Noi"},
+    {"customer_email": "khachhang10@phuongdong.vn", "car_name": "VinFast Lux A2.0", "start": date(2025, 8, 5), "end": date(2025, 8, 6), "pickup": "Bac Tu Liem, Ha Noi"},
+    {"customer_email": "khachhang11@phuongdong.vn", "car_name": "Tesla Model 3", "start": date(2025, 8, 22), "end": date(2025, 8, 25), "pickup": "Ha Dong, Ha Noi"},
+    {"customer_email": "khachhang12@phuongdong.vn", "car_name": "Tesla Model Y", "start": date(2025, 9, 12), "end": date(2025, 9, 15), "pickup": "Hoang Mai, Ha Noi"},
+    {"customer_email": "khachhang13@phuongdong.vn", "car_name": "Hyundai SantaFe", "start": date(2025, 10, 3), "end": date(2025, 10, 5), "pickup": "Gia Lam, Ha Noi"},
+    {"customer_email": "khachhang14@phuongdong.vn", "car_name": "VinFast Lux SA2.0", "start": date(2025, 10, 20), "end": date(2025, 10, 24), "pickup": "Dong Anh, Ha Noi"},
+    {"customer_email": "khachhang15@phuongdong.vn", "car_name": "Toyota Vios", "start": date(2025, 11, 8), "end": date(2025, 11, 10), "pickup": "Soc Son, Ha Noi"},
+    {"customer_email": "khachhang16@phuongdong.vn", "car_name": "VinFast VF 3", "start": date(2025, 12, 1), "end": date(2025, 12, 5), "pickup": "Me Linh, Ha Noi"},
+    {"customer_email": "khachhang17@phuongdong.vn", "car_name": "Mazda CX-5", "start": date(2025, 12, 18), "end": date(2025, 12, 20), "pickup": "Son Tay, Ha Noi"},
+    {"customer_email": "khachhang18@phuongdong.vn", "car_name": "Toyota Innova", "start": date(2026, 1, 8), "end": date(2026, 1, 10), "pickup": "Thanh Tri, Ha Noi"},
+    {"customer_email": "khachhang19@phuongdong.vn", "car_name": "VinFast VF 5", "start": date(2026, 1, 24), "end": date(2026, 1, 25), "pickup": "Thuong Tin, Ha Noi"},
+    {"customer_email": "khachhang20@phuongdong.vn", "car_name": "Kia Seltos", "start": date(2026, 2, 14), "end": date(2026, 2, 17), "pickup": "Phu Xuyen, Ha Noi"},
+    {"customer_email": "khachhang21@phuongdong.vn", "car_name": "VinFast VF 6", "start": date(2026, 3, 4), "end": date(2026, 3, 6), "pickup": "Quoc Oai, Ha Noi"},
+    {"customer_email": "khachhang22@phuongdong.vn", "car_name": "Tesla Model 3", "start": date(2026, 3, 22), "end": date(2026, 3, 26), "pickup": "Thach That, Ha Noi"},
+    {"customer_email": "khachhang23@phuongdong.vn", "car_name": "VinFast Lux A2.0", "start": date(2026, 4, 9), "end": date(2026, 4, 12), "pickup": "Dan Phuong, Ha Noi"},
+    {"customer_email": "khachhang24@phuongdong.vn", "car_name": "Hyundai SantaFe", "start": date(2026, 5, 3), "end": date(2026, 5, 5), "pickup": "Hoai Duc, Ha Noi"},
+    {"customer_email": "khachhang25@phuongdong.vn", "car_name": "VinFast Lux SA2.0", "start": date(2026, 5, 24), "end": date(2026, 5, 26), "pickup": "My Duc, Ha Noi", "contract_status": "approved", "payment_status": "unpaid"},
+]
+
+
+def ensure_sample_rental_history(session):
+    cars = session.query(Car).order_by(Car.car_id).all()
+    if not cars:
+        return
+
+    car_by_name = {str(car.name or "").strip().lower(): car for car in cars}
+
+    for index, data in enumerate(SAMPLE_RENTAL_HISTORY):
+        customer = session.query(Customer).filter(Customer.email.ilike(data["customer_email"])).first()
+        car = car_by_name.get(data["car_name"].strip().lower()) or cars[index % len(cars)]
+        if not customer or not car:
+            continue
+
+        start_date = data["start"]
+        end_date = data["end"]
+        pickup_location = data["pickup"]
+        contract_status = data.get("contract_status", "completed")
+        payment_status = data.get("payment_status", "paid" if contract_status == "completed" else "unpaid")
+        method = "cash" if index % 2 == 0 else "transfer"
+        days = (end_date - start_date).days + 1
+        total_price = float(days * float(car.price_per_day or 0))
+
+        rental_request = (
+            session.query(RentalRequest)
+            .filter(
+                RentalRequest.customer_id == customer.customer_id,
+                RentalRequest.car_id == car.car_id,
+                RentalRequest.start_date == start_date,
+                RentalRequest.end_date == end_date,
+                RentalRequest.pickup_location == pickup_location,
+            )
+            .first()
+        )
+        if not rental_request:
+            rental_request = RentalRequest(
+                customer_id=customer.customer_id,
+                car_id=car.car_id,
+                start_date=start_date,
+                end_date=end_date,
+                pickup_location=pickup_location,
+                status="approved",
+            )
+            session.add(rental_request)
+            session.flush()
+        else:
+            rental_request.status = "approved"
+
+        contract = session.query(Contract).filter(Contract.request_id == rental_request.request_id).first()
+        if not contract:
+            contract = Contract(
+                request_id=rental_request.request_id,
+                customer_id=customer.customer_id,
+                car_id=car.car_id,
+                start_date=start_date,
+                end_date=end_date,
+                total_price=total_price,
+                status=contract_status,
+            )
+            session.add(contract)
+            session.flush()
+        else:
+            contract.customer_id = customer.customer_id
+            contract.car_id = car.car_id
+            contract.start_date = start_date
+            contract.end_date = end_date
+            contract.total_price = total_price
+            contract.status = contract_status
+
+        payment = session.query(Payment).filter(Payment.contract_id == contract.contract_id).first()
+        if not payment:
+            payment = Payment(
+                contract_id=contract.contract_id,
+                amount=total_price,
+                method=method,
+                status=payment_status,
+            )
+            session.add(payment)
+        else:
+            payment.amount = total_price
+            payment.method = method
+            payment.status = payment_status
+
+        if contract_status == "approved" and start_date <= date.today() <= end_date:
+            car.status = "rented"
+
+
 with SessionLocal() as session:
     admin_user = session.query(User).filter(User.username == "phamcongminh1368@gmail.com").first()
     if not admin_user:
@@ -148,6 +268,7 @@ with SessionLocal() as session:
         admin_user.password = hash_password(admin_user.password)
         session.commit()
     ensure_sample_customers(session)
+    ensure_sample_rental_history(session)
     session.commit()
 
 @app.get("/")

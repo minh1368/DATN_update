@@ -70,10 +70,14 @@ function readCarImageFile(file) {
 }
 
 function App() {
+  const location = useLocation();
+
   return (
     <>
       <ScrollToTop />
-      <Routes>
+      <RouteTransitionMarker locationKey={location.pathname} />
+      <div className="page-route-shell" key={location.pathname}>
+      <Routes location={location}>
         <Route path="/" element={<Home />} />
         <Route path="/admin" element={<Home adminMode={true} />} />
         <Route path="/thue-xe-tu-lai" element={<SelfDrivePage />} />
@@ -86,10 +90,23 @@ function App() {
         <Route path="/tin-tuc/:slug" element={<NewsDetailPage />} />
         <Route path="/dieu-khoan-su-dung" element={<TermsPolicyPage />} />
       </Routes>
+      </div>
       <FloatingChatWidget />
       <ToastHost />
     </>
   );
+}
+
+function RouteTransitionMarker({ locationKey }) {
+  const [active, setActive] = useState(false);
+
+  useEffect(() => {
+    setActive(true);
+    const timeoutId = window.setTimeout(() => setActive(false), 520);
+    return () => window.clearTimeout(timeoutId);
+  }, [locationKey]);
+
+  return <div className={`page-transition-bar ${active ? "active" : ""}`} aria-hidden="true" />;
 }
 
 function ToastHost() {
@@ -177,6 +194,19 @@ function PaymentActionIcon({ type }) {
         <rect x="3.5" y="6.5" width="17" height="11" rx="2.2" />
         <path d="M6.8 9.2c1.2 0 2.2-1 2.2-2.2M17.2 9.2c-1.2 0-2.2-1-2.2-2.2M6.8 14.8c1.2 0 2.2 1 2.2 2.2M17.2 14.8c-1.2 0-2.2 1-2.2 2.2" />
         <circle cx="12" cy="12" r="2.4" />
+      </svg>
+    );
+  }
+
+  if (type === "return") {
+    return (
+      <svg className="table-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6.5 14.5h11l1.6-4.2a2 2 0 0 0-1.9-2.7H8.8a2 2 0 0 0-1.9 1.4L5.5 14.5" />
+        <path d="M5.5 14.5v2.8h13v-2.8" />
+        <circle cx="8.4" cy="17.4" r="1.2" />
+        <circle cx="15.6" cy="17.4" r="1.2" />
+        <path d="M9.5 5.2H5.8a2.8 2.8 0 0 0 0 5.6H8" />
+        <path d="M7 8.6 9.2 11 7 13.2" />
       </svg>
     );
   }
@@ -1614,6 +1644,7 @@ function Home({ adminMode = false, initialAbout = false }) {
       
       setShowLoginForm(false);
       setLoginData({ username: "", password: "" });
+      notify("Đăng nhập thành công", "success");
     } catch (error) {
       console.error(error);
       notify(getReadableErrorMessage(error, "Đăng nhập thất bại"), "error");
@@ -2947,6 +2978,14 @@ function Home({ adminMode = false, initialAbout = false }) {
     }
 
     if (activeTab === "contracts") {
+      const formatContractStatus = (status) => {
+        const normalized = String(status || "").trim().toLowerCase();
+        if (normalized === "pending") return "Chờ duyệt";
+        if (normalized === "approved") return "Đã duyệt";
+        if (normalized === "completed") return "Hoàn thành";
+        if (normalized === "rejected") return "Đã từ chối";
+        return status || "-";
+      };
       const contractBrandOptions = [
         ...new Set(
           contracts
@@ -3046,7 +3085,7 @@ function Home({ adminMode = false, initialAbout = false }) {
               >
                 <option value="">Tất cả</option>
                 {contractStatusOptions.map((status) => (
-                  <option key={status} value={status}>{status}</option>
+                  <option key={status} value={status}>{formatContractStatus(status)}</option>
                 ))}
               </select>
             </label>
@@ -3098,18 +3137,35 @@ function Home({ adminMode = false, initialAbout = false }) {
                     <td>{contract.start_date}</td>
                     <td>{contract.end_date}</td>
                     <td>{Number(contract.total_price || 0).toLocaleString("vi-VN")}</td>
-                    <td>{contract.status}</td>
+                    <td>{formatContractStatus(contract.status)}</td>
                     <td>
                       {contract.status === "pending" ? (
-                        <button className="action-button" onClick={() => handleAction(`${API_BASE_URL}/contracts/${contract.contract_id}/approve`)}>
-                          Duyệt
+                        <button
+                          className="table-icon-button"
+                          onClick={() => handleAction(`${API_BASE_URL}/contracts/${contract.contract_id}/approve`)}
+                          title="Duyệt"
+                          aria-label="Duyệt"
+                        >
+                          <PaymentActionIcon type="check" />
                         </button>
                       ) : contract.status === "approved" ? (
-                        <button className="action-button secondary" onClick={() => handleAction(`${API_BASE_URL}/contracts/${contract.contract_id}/return`)}>
-                          Trả xe
+                        <button
+                          className="table-icon-button"
+                          onClick={() => handleAction(`${API_BASE_URL}/contracts/${contract.contract_id}/return`)}
+                          title="Trả xe"
+                          aria-label="Trả xe"
+                        >
+                          <PaymentActionIcon type="return" />
                         </button>
                       ) : (
-                        <span>Hoàn thành</span>
+                        <button
+                          className="table-icon-button"
+                          title="Đã trả xe"
+                          aria-label="Đã trả xe"
+                          disabled
+                        >
+                          <PaymentActionIcon type="return" />
+                        </button>
                       )}
                     </td>
                   </tr>
@@ -3826,8 +3882,21 @@ function Home({ adminMode = false, initialAbout = false }) {
                 {showNotifications ? (
                   <div className="notification-dropdown">
                     <div className="notification-dropdown-header">
-                      <strong>Thông báo</strong>
-                      <span>{unreadNotificationCount > 0 ? `${unreadNotificationCount} mới` : "Đã đọc"}</span>
+                      <div>
+                        <strong>Thông báo</strong>
+                        <span>{unreadNotificationCount > 0 ? `${unreadNotificationCount} mới` : "Đã đọc"}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="notification-read-all"
+                        disabled={unreadNotificationCount === 0}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          markNotificationsRead();
+                        }}
+                      >
+                        Đã đọc tất cả
+                      </button>
                     </div>
                     <div className="notification-list">
                       {notifications.length > 0 ? (

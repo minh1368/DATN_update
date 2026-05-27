@@ -38,6 +38,8 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const [userData, setUserData] = useState(null);
   const [userRentals, setUserRentals] = useState([]);
+  const [cars, setCars] = useState([]);
+  const [selectedRental, setSelectedRental] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState({
@@ -113,8 +115,22 @@ export default function ProfilePage() {
       }
     }
 
-    await fetchUserRentals(customerId);
+    await Promise.all([
+      fetchUserRentals(customerId),
+      fetchCars(),
+    ]);
     setLoading(false);
+  };
+
+  const fetchCars = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/cars`);
+      if (!response.ok) return;
+      const data = await response.json();
+      setCars(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching cars:', error);
+    }
   };
 
   const fetchCustomerByEmail = async (email) => {
@@ -160,11 +176,41 @@ export default function ProfilePage() {
       }
 
       const rentals = await response.json();
-      setUserRentals(Array.isArray(rentals) ? rentals.slice(0, 10) : []);
+      const sortedRentals = Array.isArray(rentals)
+        ? [...rentals].sort((a, b) => Number(a?.request_id || 0) - Number(b?.request_id || 0))
+        : [];
+      setUserRentals(sortedRentals);
     } catch (error) {
       console.error('Error fetching user rentals:', error);
     }
   };
+
+  const getRentalCar = (rental) => cars.find((car) => Number(car.car_id) === Number(rental?.car_id));
+
+  const formatRentalStatus = (status) => {
+    const normalized = String(status || "").toLowerCase();
+    if (normalized === "pending") return "Chờ duyệt";
+    if (normalized === "approved") return "Đã duyệt";
+    if (normalized === "rejected") return "Bị từ chối";
+    if (normalized === "completed") return "Hoàn thành";
+    return status || "-";
+  };
+
+  const getRentalTotalPrice = (rental, car) => {
+    if (!rental || !car?.price_per_day) return "-";
+    const start = new Date(rental.start_date);
+    const end = new Date(rental.end_date);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "-";
+    const days = Math.max(1, Math.floor((end - start) / 86400000) + 1);
+    return `${Number(days * Number(car.price_per_day || 0)).toLocaleString("vi-VN")} VND`;
+  };
+
+  const RentalViewIcon = () => (
+    <svg className="rental-view-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2.7 12s3.4-5.8 9.3-5.8S21.3 12 21.3 12s-3.4 5.8-9.3 5.8S2.7 12 2.7 12Z" />
+      <circle cx="12" cy="12" r="2.8" />
+    </svg>
+  );
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -380,25 +426,49 @@ export default function ProfilePage() {
                 <div className="detail-section">
                   <h3>Lịch sử dụng thuê xe</h3>
                   {userRentals.length > 0 ? (
-                    <div className="rentals-list">
-                      {userRentals.map((rental) => (
-                        <div key={rental.request_id} className="rental-item">
-                          <div className="rental-info">
-                            <div className="rental-id">Yêu cầu #{rental.request_id}</div>
-                            <div className="rental-dates">
-                              {rental.start_date} → {rental.end_date}
-                            </div>
-                            <div className="rental-status">
-                              Trạng thái: <span className={`status-${rental.status}`}>
-                                {rental.status === 'pending' ? 'Chờ duyệt' :
-                                 rental.status === 'approved' ? 'Đã duyệt' :
-                                 rental.status === 'rejected' ? 'Bị từ chối' : rental.status}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                    <>
+                    <div className="rentals-table-wrap">
+                      <table className="rentals-table">
+                        <thead>
+                          <tr>
+                            <th>STT</th>
+                            <th>Xe</th>
+                            <th>Thời gian thuê</th>
+                            <th>Trạng thái</th>
+                            <th>Xem</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {userRentals.map((rental, index) => {
+                            const car = getRentalCar(rental);
+                            return (
+                              <tr key={rental.request_id}>
+                                <td>{index + 1}</td>
+                                <td>{car?.name || `Xe #${rental.car_id}`}</td>
+                                <td>{rental.start_date} → {rental.end_date}</td>
+                                <td>
+                                  <span className={`rental-status-chip status-${rental.status}`}>
+                                    {formatRentalStatus(rental.status)}
+                                  </span>
+                                </td>
+                                <td>
+                                  <button
+                                    type="button"
+                                    className="rental-view-button"
+                                    title="Xem chi tiết"
+                                    aria-label="Xem chi tiết"
+                                    onClick={() => setSelectedRental({ ...rental, displayIndex: index + 1 })}
+                                  >
+                                    <RentalViewIcon />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
+                    </>
                   ) : (
                     <p className="no-rentals">Chưa có lịch sử dụng thuê xe.</p>
                   )}
@@ -408,6 +478,40 @@ export default function ProfilePage() {
           </div>
         </div>
       </main>
+      {selectedRental ? (
+        <>
+          <div className="modal-overlay" onClick={() => setSelectedRental(null)} />
+          <div className="rental-detail-modal">
+            <button className="modal-close" type="button" onClick={() => setSelectedRental(null)}>
+              ×
+            </button>
+            <h3>Chi tiết yêu cầu thuê xe</h3>
+            <div className="rental-detail-grid">
+              {(() => {
+                const car = getRentalCar(selectedRental);
+                const details = [
+                  ["H\u1ECD v\u00E0 t\u00EAn", userData.name || "-"],
+                  ["Email", userData.email || "-"],
+                  ["S\u1ED1 \u0111i\u1EC7n tho\u1EA1i", userData.phone || "-"],
+                  ["\u0110\u1ECBa \u0111i\u1EC3m nh\u1EADn xe", selectedRental.pickup_location || "-"],
+                  ["Xe", car?.name || `Xe #${selectedRental.car_id}`],
+                  ["H\u00E3ng xe", car?.brand || "-"],
+                  ["Bi\u1EC3n s\u1ED1", car?.license_plate || "-"],
+                  ["Th\u1EDDi gian thu\u00EA", `${selectedRental.start_date} \u2192 ${selectedRental.end_date}`],
+                  ["Gi\u00E1 thu\u00EA", getRentalTotalPrice(selectedRental, car)],
+                  ["Tr\u1EA1ng th\u00E1i", formatRentalStatus(selectedRental.status)],
+                ];
+                return details.map(([label, value]) => (
+                  <div className="rental-detail-item" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
