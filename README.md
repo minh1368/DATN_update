@@ -68,7 +68,7 @@ Chạy backend và frontend ở local như hướng dẫn trên, sau đó mở t
 cloudflared tunnel --url http://localhost:5173
 ```
 
-Nếu cần public backend riêng, mở thêm một tunnel khác:
+Chạy public backend:
 
 ```powershell
 cloudflared tunnel --url http://localhost:8000
