@@ -10,12 +10,6 @@ Hệ thống thông tin quản lý cho thuê xe gồm backend FastAPI, frontend 
 - Xuất báo cáo thanh toán ra CSV và Excel.
 - Chat hỗ trợ khách hàng và AI Chat.
 
-## Yêu cầu môi trường
-
-- Python 3.12+
-- Node.js 20+
-- PostgreSQL
-
 ## Cài đặt backend
 
 ```powershell
