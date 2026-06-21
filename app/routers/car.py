@@ -57,7 +57,7 @@ def update_car(car_id: int, car_data: CarCreate, db: Session = Depends(get_db), 
 
 # DELETE car
 @router.delete("/{car_id}")
-def delete_car(car_id: int, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
+def delete_car(car_id: int, db: Session = Depends(get_db), user: dict = Depends(require_admin)):
     car = db.query(Car).filter(Car.car_id == car_id).first()
     
     if not car:

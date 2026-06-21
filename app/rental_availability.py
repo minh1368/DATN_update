@@ -1,10 +1,11 @@
 from sqlalchemy.orm import Session
 
 from app.models.contract import Contract
+from app.models.payment import Payment
 from app.models.rental_request import RentalRequest
 
 
-ACTIVE_REQUEST_STATUSES = ("pending", "approved")
+ACTIVE_REQUEST_STATUSES = ("pending", "deposit_pending", "approved")
 ACTIVE_CONTRACT_STATUSES = ("pending", "approved")
 
 
@@ -16,11 +17,22 @@ def has_overlapping_booking(
     exclude_request_id: int | None = None,
     exclude_contract_id: int | None = None,
 ) -> bool:
+    completed_contract_request_ids = db.query(Contract.request_id).filter(
+        Contract.car_id == car_id,
+        Contract.status == "completed",
+    )
+    inactive_payment_request_ids = db.query(Payment.request_id).filter(
+        Payment.request_id.isnot(None),
+        Payment.status.in_(["rejected", "cancelled", "refunded"]),
+    )
+
     request_query = db.query(RentalRequest).filter(
         RentalRequest.car_id == car_id,
         RentalRequest.status.in_(ACTIVE_REQUEST_STATUSES),
         RentalRequest.start_date <= end_date,
         RentalRequest.end_date >= start_date,
+        ~RentalRequest.request_id.in_(completed_contract_request_ids),
+        ~RentalRequest.request_id.in_(inactive_payment_request_ids),
     )
     if exclude_request_id is not None:
         request_query = request_query.filter(RentalRequest.request_id != exclude_request_id)

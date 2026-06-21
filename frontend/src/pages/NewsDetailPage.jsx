@@ -1,6 +1,6 @@
 import { Link, useParams } from "react-router-dom";
-import "../App.css";
 import AppFooter from "../components/AppFooter.jsx";
+import PageHeader from "../components/PageHeader.jsx";
 import { getNewsBySlug, formatNewsDate, newsArticles } from "../lib/newsData.js";
 
 export default function NewsDetailPage() {
@@ -10,14 +10,7 @@ export default function NewsDetailPage() {
   if (!article) {
     return (
       <div className="gf-page news-page">
-        <header className="gf-header">
-          <div className="gf-header-inner">
-            <Link to="/" className="gf-brand">
-              <span className="logo-icon"><img src="/image/brand/logo.png" alt="Phương Đông" /></span>
-              <span className="gf-brand-text">Phương Đông</span>
-            </Link>
-          </div>
-        </header>
+        <PageHeader />
         <main className="news-detail-empty">
           <h1>Không tìm thấy bài viết</h1>
           <Link to="/tin-tuc" className="cta-button">
@@ -34,26 +27,7 @@ export default function NewsDetailPage() {
 
   return (
     <div className="gf-page news-page">
-      <header className="gf-header">
-        <div className="gf-header-inner">
-          <Link to="/" className="gf-brand">
-            <span className="logo-icon"><img src="/image/brand/logo.png" alt="Phương Đông" /></span>
-            <span className="gf-brand-text">Phương Đông</span>
-          </Link>
-          <nav className="gf-nav">
-            <Link to="/tin-tuc" className="gf-nav-link">
-              Tin tức
-            </Link>
-            <span className="gf-nav-sep">/</span>
-            <span className="gf-nav-current">Chi tiết</span>
-          </nav>
-          <div className="gf-header-cta">
-            <a className="login-btn" href="tel:0566999666">
-              Hotline: 0566 999 666
-            </a>
-          </div>
-        </div>
-      </header>
+      <PageHeader />
 
       <article className="news-detail">
         <div className="news-detail-topbar">

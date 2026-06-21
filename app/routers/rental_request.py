@@ -1,14 +1,80 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime
 
-from app.dependencies import get_db, require_staff_or_admin
+from app.dependencies import get_db, require_admin, require_staff_or_admin
 from app.models.rental_request import RentalRequest
 from app.models.car import Car
+from app.models.payment import Payment
+from app.models.contract import Contract
 from app.rental_availability import has_overlapping_booking
 from app.schemas.rental_request import RentalRequestCreate, RentalRequestResponse
 
 router = APIRouter(prefix="/rental_requests", tags=["Rental Requests"])
+
+DEPOSIT_RATE = 0.2
+MIN_DEPOSIT_AMOUNT = 300_000
+VAT_RATE = 0.08
+
+
+class RejectRequestPayload(BaseModel):
+    reason: str | None = None
+
+
+def calculate_rental_total(car: Car, req: RentalRequestCreate) -> float:
+    days = (req.end_date - req.start_date).days + 1
+    rental_fee = float(days * float(car.price_per_day or 0))
+    return float(rental_fee + round(rental_fee * VAT_RATE))
+
+
+def calculate_deposit_amount(total_amount: float) -> float:
+    if total_amount <= 0:
+        return 0
+    return float(min(total_amount, max(MIN_DEPOSIT_AMOUNT, round(total_amount * DEPOSIT_RATE))))
+
+
+def create_deposit_payment(db: Session, rental_request: RentalRequest, total_amount: float) -> None:
+    existing = db.query(Payment).filter(
+        Payment.request_id == rental_request.request_id,
+        Payment.payment_type == "deposit",
+    ).first()
+    if existing:
+        return
+
+    deposit_amount = calculate_deposit_amount(total_amount)
+    db.add(Payment(
+        request_id=rental_request.request_id,
+        amount=deposit_amount,
+        total_amount=total_amount,
+        remaining_amount=max(total_amount - deposit_amount, 0),
+        payment_type="deposit",
+        status="unpaid",
+        note=f"Đặt cọc yêu cầu #{rental_request.request_id}",
+    ))
+
+def create_remaining_payment(db: Session, rental_request: RentalRequest, deposit: Payment | None) -> None:
+    existing = db.query(Payment).filter(
+        Payment.request_id == rental_request.request_id,
+        Payment.payment_type.in_(["remaining", "rental"]),
+    ).first()
+    if existing:
+        return
+
+    total_amount = float(deposit.total_amount or 0) if deposit else 0
+    deposit_amount = float(deposit.amount or 0) if deposit else 0
+    remaining_amount = max(total_amount - deposit_amount, 0)
+    db.add(Payment(
+        request_id=rental_request.request_id,
+        amount=remaining_amount,
+        total_amount=total_amount,
+        remaining_amount=remaining_amount,
+        payment_type="remaining",
+        status="paid" if remaining_amount == 0 else "unpaid",
+        note=f"Thanh toán phần còn lại khi nhận xe cho yêu cầu #{rental_request.request_id}",
+    ))
+
 
 # GET all requests
 @router.get("/", response_model=List[RentalRequestResponse])
@@ -19,6 +85,65 @@ def get_requests(db: Session = Depends(get_db), user: dict = Depends(require_sta
 @router.get("/customer/{customer_id}", response_model=List[RentalRequestResponse])
 def get_requests_by_customer(customer_id: int, db: Session = Depends(get_db)):
     return db.query(RentalRequest).filter(RentalRequest.customer_id == customer_id).all()
+
+
+@router.get("/customer-details/{customer_id}")
+def get_request_details_by_customer(customer_id: int, db: Session = Depends(get_db)):
+    customer_requests = db.query(RentalRequest).filter(RentalRequest.customer_id == customer_id).all()
+    results = []
+    for item in customer_requests:
+        car = db.query(Car).filter(Car.car_id == item.car_id).first()
+        deposit = db.query(Payment).filter(
+            Payment.request_id == item.request_id,
+            Payment.payment_type == "deposit",
+        ).first()
+        remaining = db.query(Payment).filter(
+            Payment.request_id == item.request_id,
+            Payment.payment_type.in_(["remaining", "rental"]),
+        ).first()
+        contract = db.query(Contract).filter(Contract.request_id == item.request_id).first()
+        reject_reason = ""
+        reject_payment = next(
+            (
+                payment
+                for payment in (remaining, deposit)
+                if payment and payment.status in ["rejected", "cancelled", "refund_pending"] and payment.note
+            ),
+            None,
+        )
+        if item.status == "rejected" or reject_payment:
+            if reject_payment:
+                reject_reason = reject_payment.note
+                prefix = "Lý do từ chối:"
+                if reject_reason.startswith(prefix):
+                    reject_reason = reject_reason[len(prefix):].strip()
+                reject_reason = reject_reason.split(". Cần hoàn tiền cọc")[0].strip()
+        results.append({
+            "request_id": item.request_id,
+            "customer_id": item.customer_id,
+            "car_id": item.car_id,
+            "car_name": car.name if car else "",
+            "start_date": item.start_date,
+            "end_date": item.end_date,
+            "pickup_location": item.pickup_location,
+            "status": item.status,
+            "contract_id": contract.contract_id if contract else None,
+            "contract_status": contract.status if contract else None,
+            "reject_reason": reject_reason,
+            "payments": {
+                "deposit": {
+                    "payment_id": deposit.payment_id,
+                    "status": deposit.status,
+                    "note": deposit.note,
+                } if deposit else None,
+                "remaining": {
+                    "payment_id": remaining.payment_id,
+                    "status": remaining.status,
+                    "note": remaining.note,
+                } if remaining else None,
+            },
+        })
+    return results
 
 # POST create request (admin/staff)
 @router.post("/", response_model=RentalRequestResponse)
@@ -36,8 +161,11 @@ def create_request(req: RentalRequestCreate, db: Session = Depends(get_db), user
     if has_overlapping_booking(db, req.car_id, req.start_date, req.end_date):
         raise HTTPException(status_code=400, detail="Xe đã có lịch thuê trong khoảng thời gian này")
 
-    new_req = RentalRequest(**req.model_dump())
+    total_amount = calculate_rental_total(car, req)
+    new_req = RentalRequest(**req.model_dump(), status="deposit_pending")
     db.add(new_req)
+    db.flush()
+    create_deposit_payment(db, new_req, total_amount)
     db.commit()
     db.refresh(new_req)
     return new_req
@@ -55,11 +183,37 @@ def create_customer_request(req: RentalRequestCreate, db: Session = Depends(get_
     if req.start_date > req.end_date:
         raise HTTPException(status_code=400, detail="Ngày kết thúc không được trước ngày bắt đầu")
 
+    completed_contract_request_ids = db.query(Contract.request_id).filter(
+        Contract.car_id == req.car_id,
+        Contract.status == "completed",
+    )
+    inactive_payment_request_ids = db.query(Payment.request_id).filter(
+        Payment.request_id.isnot(None),
+        Payment.status.in_(["rejected", "cancelled", "refunded"]),
+    )
+    duplicate = db.query(RentalRequest).filter(
+        RentalRequest.customer_id == req.customer_id,
+        RentalRequest.car_id == req.car_id,
+        RentalRequest.status.in_(("deposit_pending", "pending", "approved")),
+        RentalRequest.start_date <= req.end_date,
+        RentalRequest.end_date >= req.start_date,
+        ~RentalRequest.request_id.in_(completed_contract_request_ids),
+        ~RentalRequest.request_id.in_(inactive_payment_request_ids),
+    ).first()
+    if duplicate:
+        raise HTTPException(
+            status_code=400,
+            detail="Bạn đã có yêu cầu thuê xe này trong khoảng thời gian này. Vui lòng hoàn kiểm tra lại.",
+        )
+
     if has_overlapping_booking(db, req.car_id, req.start_date, req.end_date):
         raise HTTPException(status_code=400, detail="Xe đã có lịch thuê trong khoảng thời gian này")
 
-    new_req = RentalRequest(**req.model_dump())
+    total_amount = calculate_rental_total(car, req)
+    new_req = RentalRequest(**req.model_dump(), status="deposit_pending")
     db.add(new_req)
+    db.flush()
+    create_deposit_payment(db, new_req, total_amount)
     db.commit()
     db.refresh(new_req)
     return new_req
@@ -72,20 +226,66 @@ def approve_request(request_id: int, db: Session = Depends(get_db), user: dict =
     if not req:
         raise HTTPException(status_code=404, detail="Không tìm thấy yêu cầu")
 
+    deposit = db.query(Payment).filter(
+        Payment.request_id == req.request_id,
+        Payment.payment_type == "deposit",
+    ).first()
+    if deposit:
+        deposit.status = "paid"
+        deposit.paid_at = datetime.utcnow()
     req.status = "approved"
+    create_remaining_payment(db, req, deposit)
     db.commit()
     
     return {"message": "Đã duyệt yêu cầu"}
 
+# DELETE request
+@router.delete("/{request_id}")
+def delete_request(request_id: int, db: Session = Depends(get_db), user: dict = Depends(require_admin)):
+    req = db.query(RentalRequest).filter(RentalRequest.request_id == request_id).first()
+
+    if not req:
+        raise HTTPException(status_code=404, detail="Không tìm thấy yêu cầu")
+
+    related_contract = db.query(Contract).filter(Contract.request_id == request_id).first()
+    if related_contract:
+        raise HTTPException(status_code=400, detail="Không thể xóa yêu cầu đã tạo hợp đồng")
+
+    db.query(Payment).filter(Payment.request_id == request_id).delete()
+    db.delete(req)
+    db.commit()
+
+    return {"message": "Đã xóa yêu cầu"}
+
 # PUT reject request
 @router.put("/{request_id}/reject")
-def reject_request(request_id: int, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
+def reject_request(
+    request_id: int,
+    payload: RejectRequestPayload | None = None,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_staff_or_admin),
+):
     req = db.query(RentalRequest).filter(RentalRequest.request_id == request_id).first()
     
     if not req:
         raise HTTPException(status_code=404, detail="Không tìm thấy yêu cầu")
 
     req.status = "rejected"
+    reason = (payload.reason or "").strip() if payload else ""
+    reject_note = f"Lý do từ chối: {reason}" if reason else "Yêu cầu bị từ chối"
+    deposit = db.query(Payment).filter(
+        Payment.request_id == req.request_id,
+        Payment.payment_type == "deposit",
+    ).first()
+    if deposit:
+        if deposit.status == "paid":
+            deposit.status = "refund_pending"
+            deposit.note = f"{reject_note}. Cần hoàn tiền cọc"
+        elif deposit.status in ["pending", "unpaid"]:
+            deposit.status = "cancelled"
+            deposit.note = reject_note
+        elif deposit.status not in ["refunded"]:
+            deposit.note = reject_note
     db.commit()
     
     return {"message": "Đã từ chối yêu cầu"}

@@ -3,5 +3,3 @@ uvicorn
 sqlalchemy
 psycopg2-binary
 openpyxl
-pytest
-httpx

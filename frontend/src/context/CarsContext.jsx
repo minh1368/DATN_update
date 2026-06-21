@@ -1,23 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { fallbackCars } from "../lib/carData.js";
+import { carService } from "../services/dashboardService.js";
 
 const CarsContext = createContext(null);
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export function CarsProvider({ children }) {
   const [cars, setCars] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const headers = {
-      "Content-Type": "application/json",
-      "X-User-Role": "customer",
-    };
-
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/cars`, { headers });
-      const data = res.ok ? await res.json() : [];
+      const data = await carService.getAll();
       setCars(Array.isArray(data) ? data : []);
     } catch {
       setCars([]);

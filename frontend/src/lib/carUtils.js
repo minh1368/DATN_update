@@ -32,6 +32,68 @@ export function selfDriveDetailPath(car) {
   return `/thue-xe-tu-lai/${carSlug(car)}`;
 }
 
+const BRAND_ALIASES = {
+  audi: "Audi",
+  bmw: "BMW",
+  byd: "BYD",
+  ford: "Ford",
+  honda: "Honda",
+  hyundai: "Hyundai",
+  kia: "KIA",
+  lexus: "Lexus",
+  mazda: "Mazda",
+  mercedes: "Mercedes",
+  "mercedes-benz": "Mercedes-Benz",
+  mg: "MG",
+  mini: "MINI",
+  mitsubishi: "Mitsubishi",
+  nissan: "Nissan",
+  peugeot: "Peugeot",
+  porsche: "Porsche",
+  suzuki: "Suzuki",
+  tesla: "Tesla",
+  toyota: "Toyota",
+  vinfast: "VinFast",
+  volkswagen: "Volkswagen",
+};
+
+export function normalizeBrandKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+export function canonicalizeBrand(value) {
+  const cleaned = String(value || "").trim().replace(/\s+/g, " ");
+  if (!cleaned) return "";
+
+  const key = normalizeBrandKey(cleaned);
+  if (BRAND_ALIASES[key]) return BRAND_ALIASES[key];
+
+  return cleaned
+    .split(" ")
+    .map((part) => {
+      if (!part) return part;
+      const lowerPart = part.toLocaleLowerCase("vi-VN");
+      return lowerPart.charAt(0).toLocaleUpperCase("vi-VN") + lowerPart.slice(1);
+    })
+    .join(" ");
+}
+
+export function uniqueCanonicalBrands(cars) {
+  const brands = new Map();
+  (cars || []).forEach((car) => {
+    const display = canonicalizeBrand(car?.brand);
+    if (!display) return;
+    const key = normalizeBrandKey(display);
+    if (!brands.has(key)) brands.set(key, display);
+  });
+  return [...brands.values()].sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
+}
+
 export function normalizeImageUrl(url) {
   if (!url) return "";
   const trimmedUrl = String(url).trim();
@@ -51,8 +113,8 @@ export function getCarImageUrl(car, fallbackCars) {
   const url = car?.image_url || "";
   if (url) return normalizeImageUrl(url);
   const name = String(car?.name || "").trim();
-  const brand = String(car?.brand || "").trim();
-  const match = (fallbackCars || []).find((c) => c.name === name && c.brand === brand);
+  const brandKey = normalizeBrandKey(car?.brand);
+  const match = (fallbackCars || []).find((c) => c.name === name && normalizeBrandKey(c.brand) === brandKey);
   return normalizeImageUrl(match?.image_url || "");
 }
 

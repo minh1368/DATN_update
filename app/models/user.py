@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, DateTime, Integer, String, func
 from app.database import Base
 
 class User(Base):
@@ -8,4 +8,7 @@ class User(Base):
     name = Column(String)
     username = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
+    reset_otp = Column(String, nullable=True)
+    reset_otp_expires_at = Column(DateTime, nullable=True)
     role = Column(String, nullable=False)  # admin / staff
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

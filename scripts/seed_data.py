@@ -7,6 +7,7 @@ from app.models.customer import Customer
 from app.models.rental_request import RentalRequest
 from app.models.contract import Contract
 from app.models.payment import Payment
+from app.models.review import Review
 
 CAR_BRANDS = [
     ("Toyota", "Camry"),
@@ -28,6 +29,12 @@ CUSTOMER_NAMES = [
 
 PAYMENT_METHODS = ["cash", "transfer"]
 STATUSES = ["available", "rented"]
+REVIEW_MESSAGES = [
+    "Xe sạch, thủ tục nhanh và nhân viên hỗ trợ rất rõ ràng.",
+    "Giá thuê hợp lý, xe đúng như thông tin trên hệ thống.",
+    "Quy trình đặt xe và thanh toán dễ theo dõi.",
+    "Tôi hài lòng với chất lượng xe và cách xử lý yêu cầu.",
+]
 
 
 def create_schema():
@@ -110,8 +117,9 @@ def seed_contracts_and_payments(db):
         if not car or car.status != "available":
             continue
 
-        days = (req.end_date - req.start_date).days
-        total_price = float(days * car.price_per_day)
+        days = max(1, (req.end_date - req.start_date).days + 1)
+        rental_fee = float(days * car.price_per_day)
+        total_price = rental_fee + round(rental_fee * 0.08)
         contract = Contract(
             request_id=req.request_id,
             customer_id=req.customer_id,
@@ -135,9 +143,30 @@ def seed_contracts_and_payments(db):
             contract_id=contract.contract_id,
             amount=contract.total_price,
             method=random.choice(PAYMENT_METHODS),
-            status=random.choice(["paid", "unpaid"])
+            status="paid"
         )
         db.add(payment)
+    db.commit()
+
+
+def seed_reviews(db, count=4):
+    existing = db.query(Review).count()
+    if existing >= count:
+        return
+
+    customers = db.query(Customer).all()
+    if not customers:
+        return
+
+    for index in range(count - existing):
+        customer = customers[index % len(customers)]
+        db.add(Review(
+            customer_id=customer.customer_id,
+            name=customer.name,
+            email=customer.email,
+            rating=random.choice([4, 5]),
+            message=REVIEW_MESSAGES[index % len(REVIEW_MESSAGES)],
+        ))
     db.commit()
 
 
@@ -149,6 +178,7 @@ def main():
         seed_customers(db)
         seed_requests(db)
         seed_contracts_and_payments(db)
+        seed_reviews(db)
         print("Seed data completed.")
     finally:
         db.close()

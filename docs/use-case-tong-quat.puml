@@ -1,0 +1,71 @@
+@startuml use-case-tong-quat
+' Biểu đồ use case TỔNG QUÁT (gọn, bố cục dọc)
+' Actor trái/phải — use case xếp dọc trong khung hệ thống
+
+left to right direction
+skinparam linetype ortho
+skinparam actorStyle awesome
+skinparam usecase {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+}
+
+actor "Khách hàng" as KH
+actor "Nhân viên" as NV
+actor "Quản lý" as QL
+
+' Đặt Khách hàng trên, Nhân viên dưới (bên trái)
+KH -[hidden]down- NV
+QL -[hidden]up- NV
+
+QL -up-|> NV
+
+rectangle "Hệ thống quản lý cho thuê xe" {
+
+  usecase "Đăng ký & đăng nhập" as UC_AUTH
+  usecase "Xem xe" as UC_XE
+  usecase "Gửi yêu cầu & đặt cọc" as UC_DAT
+  usecase "Theo dõi thuê xe" as UC_THEO
+  usecase "Chat hỗ trợ" as UC_CHAT
+
+  usecase "Xử lý yêu cầu thuê" as UC_XLYC
+  usecase "Quản lý xe" as UC_QLXE
+  usecase "Quản lý khách hàng" as UC_QLKH
+  usecase "Quản lý hợp đồng & thanh toán" as UC_QLHD
+
+  usecase "Quản lý người dùng" as UC_QLNS
+  usecase "Xem báo cáo & xuất file" as UC_BC
+
+  ' Xếp use case theo chiều dọc
+  UC_AUTH -[hidden]down- UC_XE
+  UC_XE -[hidden]down- UC_DAT
+  UC_DAT -[hidden]down- UC_THEO
+  UC_THEO -[hidden]down- UC_CHAT
+  UC_CHAT -[hidden]down- UC_XLYC
+  UC_XLYC -[hidden]down- UC_QLXE
+  UC_QLXE -[hidden]down- UC_QLKH
+  UC_QLKH -[hidden]down- UC_QLHD
+  UC_QLHD -[hidden]down- UC_QLNS
+  UC_QLNS -[hidden]down- UC_BC
+}
+
+' Khách hàng (trái)
+KH --> UC_AUTH
+KH --> UC_XE
+KH --> UC_DAT
+KH --> UC_THEO
+KH --> UC_CHAT
+
+' Nhân viên (trái, dưới) — Quản lý kế thừa
+NV --> UC_AUTH
+NV --> UC_XLYC
+NV --> UC_QLXE
+NV --> UC_QLKH
+NV --> UC_QLHD
+NV --> UC_CHAT
+NV --> UC_BC
+
+' Quản lý (phải) — chỉ UC riêng
+QL --> UC_QLNS
+
+@enduml

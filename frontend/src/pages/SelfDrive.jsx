@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import "../App.css";
 import AppFooter from "../components/AppFooter.jsx";
+import PageHeader from "../components/PageHeader.jsx";
 import { useCars } from "../context/CarsContext.jsx";
-import { getCarImageUrl, selfDriveDetailPath } from "../lib/carUtils.js";
+import { canonicalizeBrand, getCarImageUrl, selfDriveDetailPath, uniqueCanonicalBrands } from "../lib/carUtils.js";
 import { fallbackCars } from "../lib/carData.js";
 
 function uniqueValues(list, getter) {
@@ -12,30 +12,68 @@ function uniqueValues(list, getter) {
 
 const CARS_PER_PAGE = 8;
 
+function getCarCategory(car) {
+  return (car.fuel_type || "Self-drive").toUpperCase();
+}
+
+function getCarSeats(car) {
+  return car.seats ? `${car.seats} chỗ` : "-";
+}
+
+function getCarTransmission(car) {
+  return car.transmission || "-";
+}
+
 export default function SelfDrivePage() {
   const navigate = useNavigate();
   const { displayCars, loading } = useCars();
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({
-    location: "Hà Nội",
-    startDate: "",
-    endDate: "",
+    search: "",
     brand: "",
     seats: "",
+    transmission: "",
+    fuelType: "",
+    status: "",
     priceMax: "",
     sort: "popular",
   });
 
-  const brands = useMemo(() => uniqueValues(displayCars, (c) => c.brand), [displayCars]);
+  const brands = useMemo(() => uniqueCanonicalBrands(displayCars), [displayCars]);
   const seatsOptions = useMemo(() => uniqueValues(displayCars, (c) => c.seats).sort((a, b) => a - b), [displayCars]);
+  const transmissionOptions = useMemo(
+    () => uniqueValues(displayCars, (c) => c.transmission).sort((a, b) => String(a).localeCompare(String(b), "vi")),
+    [displayCars]
+  );
+  const fuelTypeOptions = useMemo(
+    () => uniqueValues(displayCars, (c) => c.fuel_type).sort((a, b) => String(a).localeCompare(String(b), "vi")),
+    [displayCars]
+  );
 
   const filteredCars = useMemo(() => {
+    const keyword = filters.search.trim().toLowerCase();
     const max = filters.priceMax ? Number(filters.priceMax) : null;
     const seats = filters.seats ? Number(filters.seats) : null;
 
     let result = [...displayCars];
-    if (filters.brand) result = result.filter((c) => c.brand === filters.brand);
+    if (keyword) {
+      result = result.filter((c) => [
+        c.name,
+        c.brand,
+        canonicalizeBrand(c.brand),
+        c.license_plate,
+        c.color,
+        c.transmission,
+        c.fuel_type,
+        c.year,
+        c.seats ? `${c.seats} chỗ` : "",
+      ].join(" ").toLowerCase().includes(keyword));
+    }
+    if (filters.brand) result = result.filter((c) => canonicalizeBrand(c.brand) === filters.brand);
     if (seats) result = result.filter((c) => Number(c.seats) === seats);
+    if (filters.transmission) result = result.filter((c) => String(c.transmission || "") === filters.transmission);
+    if (filters.fuelType) result = result.filter((c) => String(c.fuel_type || "") === filters.fuelType);
+    if (filters.status) result = result.filter((c) => String(c.status || "").toLowerCase() === filters.status);
     if (max !== null && !Number.isNaN(max)) result = result.filter((c) => Number(c.price_per_day) <= max);
 
     if (filters.sort === "price_asc") result = [...result].sort((a, b) => a.price_per_day - b.price_per_day);
@@ -64,51 +102,49 @@ export default function SelfDrivePage() {
 
   return (
     <div className="gf-page">
-      <header className="gf-header">
-        <div className="gf-header-inner">
-          <Link to="/" className="gf-brand">
-            <span className="logo-icon"><img src="/image/brand/logo.png" alt="Phương Đông" /></span>
-            <span className="gf-brand-text">Thuê xe</span>
-          </Link>
-          <nav className="gf-nav">
-            <Link to="/" className="gf-nav-link">
-              Trang chủ
-            </Link>
-            <span className="gf-nav-sep">/</span>
-            <span className="gf-nav-current">Thuê xe tự lái</span>
-          </nav>
-          <div className="gf-header-cta">
-            <a className="login-btn" href="tel:0566999666">
-              Hotline: 0566 999 666
-            </a>
-          </div>
-        </div>
-      </header>
+      <PageHeader />
 
       <section className="gf-hero">
         <div className="gf-hero-inner">
           <div className="gf-hero-copy">
             <h1>Thuê xe tự lái</h1>
-            <p>Chọn địa điểm, thời gian và mẫu xe phù hợp. Giá theo ngày, quy trình nhanh, hỗ trợ 24/7.</p>
+            <p>Chọn mẫu xe phù hợp. Giá theo ngày, quy trình nhanh, hỗ trợ <span className="nowrap">24/7</span>.</p>
           </div>
 
           <div className="gf-search">
             <div className="gf-search-grid">
               <label className="gf-field">
-                <span>Địa điểm</span>
-                <select value={filters.location} onChange={(e) => setFilters((p) => ({ ...p, location: e.target.value }))}>
-                  <option value="Hà Nội">Hà Nội</option>
-                  <option value="Hồ Chí Minh">Hồ Chí Minh</option>
-                  <option value="Đà Nẵng">Đà Nẵng</option>
+                <span>Hãng xe</span>
+                <select value={filters.brand} onChange={(e) => setFilters((p) => ({ ...p, brand: e.target.value }))}>
+                  <option value="">Tất cả</option>
+                  {brands.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label className="gf-field">
-                <span>Nhận xe</span>
-                <input type="date" value={filters.startDate} onChange={(e) => setFilters((p) => ({ ...p, startDate: e.target.value }))} />
+                <span>Số chỗ</span>
+                <select value={filters.seats} onChange={(e) => setFilters((p) => ({ ...p, seats: e.target.value }))}>
+                  <option value="">Tất cả</option>
+                  {seatsOptions.map((s) => (
+                    <option key={String(s)} value={String(s)}>
+                      {s} chỗ
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="gf-field">
-                <span>Trả xe</span>
-                <input type="date" value={filters.endDate} onChange={(e) => setFilters((p) => ({ ...p, endDate: e.target.value }))} />
+                <span>Hộp số</span>
+                <select value={filters.transmission} onChange={(e) => setFilters((p) => ({ ...p, transmission: e.target.value }))}>
+                  <option value="">Tất cả</option>
+                  {transmissionOptions.map((item) => (
+                    <option key={String(item)} value={String(item)}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
               </label>
               <button type="button" className="cta-button gf-search-btn" onClick={() => document.getElementById("gf-results")?.scrollIntoView({ behavior: "smooth" })}>
                 Tìm xe
@@ -129,27 +165,14 @@ export default function SelfDrivePage() {
               Trang {currentPage}/{totalPages}
             </div>
             <div className="gf-toolbar-right">
-              <label className="gf-inline">
-                <span>Hãng</span>
-                <select value={filters.brand} onChange={(e) => setFilters((p) => ({ ...p, brand: e.target.value }))}>
-                  <option value="">Tất cả</option>
-                  {brands.map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="gf-inline">
-                <span>Số chỗ</span>
-                <select value={filters.seats} onChange={(e) => setFilters((p) => ({ ...p, seats: e.target.value }))}>
-                  <option value="">Tất cả</option>
-                  {seatsOptions.map((s) => (
-                    <option key={String(s)} value={String(s)}>
-                      {s} chỗ
-                    </option>
-                  ))}
-                </select>
+              <label className="gf-inline gf-search-inline">
+                <span>Tìm kiếm</span>
+                <input
+                  type="search"
+                  placeholder="Tìm theo tên xe, hãng..."
+                  value={filters.search}
+                  onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
+                />
               </label>
               <label className="gf-inline">
                 <span>Giá tối đa/ngày</span>
@@ -160,6 +183,25 @@ export default function SelfDrivePage() {
                   value={filters.priceMax}
                   onChange={(e) => setFilters((p) => ({ ...p, priceMax: e.target.value }))}
                 />
+              </label>
+              <label className="gf-inline">
+                <span>Loại xe</span>
+                <select value={filters.fuelType} onChange={(e) => setFilters((p) => ({ ...p, fuelType: e.target.value }))}>
+                  <option value="">Tất cả</option>
+                  {fuelTypeOptions.map((item) => (
+                    <option key={String(item)} value={String(item)}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="gf-inline">
+                <span>Trạng thái</span>
+                <select value={filters.status} onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}>
+                  <option value="">Tất cả</option>
+                  <option value="available">Còn xe</option>
+                  <option value="rented">Đang cho thuê</option>
+                </select>
               </label>
               <label className="gf-inline">
                 <span>Sắp xếp</span>
@@ -185,23 +227,61 @@ export default function SelfDrivePage() {
                 }}
               >
                 <div className="gf-card-top">
-                  <div className="gf-chip">{(car.fuel_type || "Self-drive").toUpperCase()}</div>
+                  <div className="gf-chip">{getCarCategory(car)}</div>
                   {isCarRented(car) ? <div className="gf-chip subtle rented">Đang cho thuê</div> : null}
                 </div>
                 <div className="gf-card-title">
                   <h3>{car.name}</h3>
-                  <p className="gf-muted">{car.brand || "Hãng xe"}</p>
+                  <p className="gf-muted">{canonicalizeBrand(car.brand) || "Hãng xe"}</p>
                 </div>
                 <div className="gf-card-media gf-card-media-img">
                   <img src={getCarImageUrl(car, fallbackCars)} alt={car.name} loading="lazy" />
                 </div>
                 <div className="gf-card-bottom">
                   <div>
-                    <div className="gf-price">{Number(car.price_per_day || 0).toLocaleString()} VND / ngày</div>
+                    <div className="gf-price">{Number(car.price_per_day || 0).toLocaleString()} VND</div>
+                    <span className="gf-price-unit">Giá/ngày</span>
                   </div>
                   <span className="car-card-button" role="button">
-                    Xem
+                    Xem chi tiết
                   </span>
+                </div>
+                <div className="gf-card-specs">
+                  <div>
+                    <span className="gf-card-spec-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24">
+                        <path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                        <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                        <path d="M3.8 19.5c.7-3 2.2-4.5 4.2-4.5s3.5 1.5 4.2 4.5" />
+                        <path d="M11.8 19.5c.7-3 2.2-4.5 4.2-4.5s3.5 1.5 4.2 4.5" />
+                      </svg>
+                    </span>
+                    <strong>{getCarSeats(car)}</strong>
+                  </div>
+                  <div>
+                    <span className="gf-card-spec-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24">
+                        <path d="M7 5v14" />
+                        <path d="M17 5v14" />
+                        <path d="M7 12h10" />
+                        <path d="M7 5h4" />
+                        <path d="M17 19h-4" />
+                        <circle cx="7" cy="5" r="2" />
+                        <circle cx="17" cy="12" r="2" />
+                        <circle cx="17" cy="19" r="2" />
+                      </svg>
+                    </span>
+                    <strong>{getCarTransmission(car)}</strong>
+                  </div>
+                  <div>
+                    <span className="gf-card-spec-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24">
+                        <path d="M12 3.8s6 6.2 6 10.2a6 6 0 0 1-12 0c0-4 6-10.2 6-10.2Z" />
+                        <path d="M9.3 16.7c.8 1.2 2.2 1.9 3.7 1.7" />
+                      </svg>
+                    </span>
+                    <strong>{car.color || "-"}</strong>
+                  </div>
                 </div>
               </Link>
             ))}
@@ -244,7 +324,6 @@ export default function SelfDrivePage() {
     </div>
   );
 }
-
 
 
 

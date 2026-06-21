@@ -1,14 +1,60 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import "../App.css";
 import AppFooter from "../components/AppFooter.jsx";
-
-const authStorage = window.sessionStorage;
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-import { fallbackCars } from "../lib/carData.js";
-import { carIdFromSlug, carNameFromSlug, getCarImageUrl, selfDriveDetailPath, slugify } from "../lib/carUtils.js";
-import { getReadableErrorMessage, notifyUser } from "../lib/toast.js";
+import PageHeader from "../components/PageHeader.jsx";
 import { useCars } from "../context/CarsContext.jsx";
+import { authStorage } from "../lib/auth.js";
+import { fallbackCars } from "../lib/carData.js";
+import { canonicalizeBrand, carIdFromSlug, carNameFromSlug, getCarImageUrl, selfDriveDetailPath, slugify } from "../lib/carUtils.js";
+import { getReadableErrorMessage, notifyUser } from "../lib/toast.js";
+import { carService, customerService, requestService, userService } from "../services/dashboardService.js";
+
+const DEPOSIT_RATE = 0.2;
+const MIN_DEPOSIT_AMOUNT = 300000;
+const VAT_RATE = 0.08;
+const DEPOSIT_BANK_CODE = "MB";
+const DEPOSIT_ACCOUNT_NO = "0030920046789";
+const DEPOSIT_ACCOUNT_NAME = "PHAM CONG MINH";
+
+function calculateDepositAmount(totalAmount) {
+  const total = Number(totalAmount || 0);
+  if (total <= 0) return 0;
+  return Math.min(total, Math.max(MIN_DEPOSIT_AMOUNT, Math.round(total * DEPOSIT_RATE)));
+}
+
+function formatMoney(value) {
+  return `${Number(value || 0).toLocaleString("vi-VN")} VND`;
+}
+
+function formatDateValue(value) {
+  if (!value) return "-";
+  const [year, month, day] = String(value).split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+}
+
+function formatCountdown(seconds) {
+  const safeSeconds = Math.max(Number(seconds || 0), 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainSeconds = safeSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(remainSeconds).padStart(2, "0")}`;
+}
+
+function formatRequestCode(requestId) {
+  const normalized = Number(requestId);
+  return Number.isFinite(normalized) && normalized > 0
+    ? `YC${String(normalized).padStart(3, "0")}`
+    : "YC---";
+}
+
+function getDepositQrUrl(amount, transferNote = "Dat coc tien thue xe") {
+  const params = new URLSearchParams({
+    amount: String(Math.round(Number(amount || 0))),
+    addInfo: transferNote,
+    accountName: DEPOSIT_ACCOUNT_NAME,
+  });
+  return `https://img.vietqr.io/image/${DEPOSIT_BANK_CODE}-${DEPOSIT_ACCOUNT_NO}-compact2.png?${params.toString()}`;
+}
 
 function PasswordVisibilityIcon({ visible }) {
   return visible ? (
@@ -115,13 +161,24 @@ export default function SelfDriveDetailPage() {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const todayValue = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const sanitizeDateString = (value) => {
+    if (typeof value !== "string") return "";
+    const cleaned = value.replace(/[^\d-]/g, "");
+    const parts = cleaned.split("-");
+    if (parts.length === 1) return parts[0].slice(0, 4);
+    if (parts.length === 2) return `${parts[0].slice(0, 4)}-${parts[1].slice(0, 2)}`;
+    return `${parts[0].slice(0, 4)}-${parts[1].slice(0, 2)}-${parts[2].slice(0, 2)}`.slice(0, 10);
+  };
   const [bookingData, setBookingData] = useState({
     start_date: todayValue,
     end_date: '',
     pickup_location: ''
   });
   const [bookingError, setBookingError] = useState('');
-  const [bookingSuccess, setBookingSuccess] = useState(false);
+  const [showDepositTransfer, setShowDepositTransfer] = useState(false);
+  const [depositTransferData, setDepositTransferData] = useState(null);
+  const [isSubmittingDeposit, setIsSubmittingDeposit] = useState(false);
+  const [depositCountdown, setDepositCountdown] = useState(15 * 60);
 
   useEffect(() => {
     if (!carId) {
@@ -133,14 +190,8 @@ export default function SelfDriveDetailPage() {
       return;
     }
 
-    const headers = {
-      "Content-Type": "application/json",
-      "X-User-Role": "customer",
-    };
-
     setLoading(true);
-    fetch(`${API_BASE_URL}/cars/${carId}`, { headers })
-      .then((r) => (r.ok ? r.json() : null))
+    carService.getById(carId)
       .then((data) => {
         if (data && typeof data === "object") setCar(data);
       })
@@ -148,8 +199,19 @@ export default function SelfDriveDetailPage() {
       .finally(() => setLoading(false));
   }, [carId, carNameSlug, displayCars]);
 
+  useEffect(() => {
+    if (!showDepositTransfer) return undefined;
+
+    setDepositCountdown(15 * 60);
+    const timer = window.setInterval(() => {
+      setDepositCountdown((current) => Math.max(current - 1, 0));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [showDepositTransfer, depositTransferData?.bookingCode]);
+
   const title = car?.name || "Chi tiết xe";
-  const brand = car?.brand || "-";
+  const brand = canonicalizeBrand(car?.brand) || "-";
   const price = Number(car?.price_per_day || 0).toLocaleString();
   const unitPrice = Number(car?.price_per_day || 0);
   const isCarRented = String(car?.status || "").toLowerCase() === "rented";
@@ -160,7 +222,11 @@ export default function SelfDriveDetailPage() {
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 0;
     return Math.floor((end - start) / 86400000) + 1;
   }, [bookingData.start_date, bookingData.end_date]);
-  const totalRentalPrice = rentalDays * unitPrice;
+  const rentalFee = rentalDays * unitPrice;
+  const vatAmount = Math.round(rentalFee * VAT_RATE);
+  const totalRentalPrice = rentalFee + vatAmount;
+  const depositAmount = calculateDepositAmount(totalRentalPrice);
+  const remainingPayment = Math.max(totalRentalPrice - depositAmount, 0);
 
   const otherCars = useMemo(() => {
     const id = Number(car?.car_id);
@@ -178,9 +244,7 @@ export default function SelfDriveDetailPage() {
 
   const fetchCustomerByEmail = async (email) => {
     if (!email) return null;
-    const response = await fetch(`${API_BASE_URL}/customers/by-email/${encodeURIComponent(email)}`);
-    if (!response.ok) return null;
-    return response.json();
+    return customerService.findByEmail(email).catch(() => null);
   };
 
   const handleBookClick = () => {
@@ -198,17 +262,7 @@ export default function SelfDriveDetailPage() {
     setLoginError("");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/users/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(loginData),
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.detail || "Đăng nhập thất bại");
-      }
-
-      const user = await response.json();
+      const user = await userService.login(loginData);
       const customer = user.role === "customer" ? await fetchCustomerByEmail(user.username) : null;
       const userProfile = customer
         ? { ...user, ...customer }
@@ -217,9 +271,11 @@ export default function SelfDriveDetailPage() {
       authStorage.setItem("loggedInUser", userProfile.name || user.username);
       authStorage.setItem("userRole", user.role);
       authStorage.setItem("userData", JSON.stringify(userProfile));
+      if (user.token) authStorage.setItem("authToken", user.token);
       if (customer?.customer_id) {
         authStorage.setItem("customerId", String(customer.customer_id));
       }
+      localStorage.setItem("userPassword", loginData.password);
 
       setShowLoginForm(false);
       setLoginData({ username: "", password: "" });
@@ -240,35 +296,18 @@ export default function SelfDriveDetailPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/users/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: registerData.email,
-          password: registerData.password,
-        }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.detail || "Đăng ký thất bại");
-      }
-
-      const customerResponse = await fetch(`${API_BASE_URL}/customers/public`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: registerData.fullName,
-          phone: registerData.phone,
-          email: registerData.email,
-          password: registerData.password,
-          address: registerData.address || "",
-        }),
+      await userService.register({
+        username: registerData.email,
+        password: registerData.password,
       });
 
-      if (!customerResponse.ok) {
-        const errorData = await customerResponse.json().catch(() => null);
-        throw new Error(errorData?.detail || "Không thể tạo thông tin khách hàng.");
-      }
+      await customerService.createPublic({
+        name: registerData.fullName,
+        phone: registerData.phone,
+        email: registerData.email,
+        password: registerData.password,
+        address: registerData.address || "",
+      });
 
       setAuthMode("login");
       setLoginData({ username: registerData.email, password: "" });
@@ -282,7 +321,6 @@ export default function SelfDriveDetailPage() {
   const handleBookingSubmit = async (e) => {
     e.preventDefault();
     setBookingError('');
-    setBookingSuccess(false);
 
     const customerName = String(bookingUser.name || bookingUser.fullName || "").trim();
     const customerPhone = String(bookingUser.phone || "").trim();
@@ -317,62 +355,80 @@ export default function SelfDriveDetailPage() {
         throw new Error('Tài khoản chưa có thông tin khách hàng. Vui lòng cập nhật thông tin cá nhân trước khi đặt xe.');
       }
 
-      const rentalResponse = await fetch(`${API_BASE_URL}/rental_requests/customer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customer_id: Number(customerId),
-          car_id: car.car_id,
-          start_date: bookingData.start_date,
-          end_date: bookingData.end_date,
-          pickup_location: pickupLocation
-        })
+      const rentalRequest = await requestService.createCustomerRequest({
+        customer_id: Number(customerId),
+        car_id: Number(car.car_id),
+        start_date: bookingData.start_date,
+        end_date: bookingData.end_date,
+        pickup_location: pickupLocation,
       });
+      const requestCode = formatRequestCode(rentalRequest?.request_id);
 
-      if (!rentalResponse.ok) {
-        const errorData = await rentalResponse.json().catch(() => null);
-        throw new Error(errorData?.detail || 'Không thể tạo yêu cầu thuê xe');
-      }
-
-      setBookingSuccess(true);
+      setDepositTransferData({
+        requestId: rentalRequest?.request_id,
+        bookingCode: requestCode,
+        customerId: Number(customerId),
+        customerName,
+        customerPhone,
+        customerEmail,
+        carId: car.car_id,
+        carName: car?.name || "-",
+        carBrand: canonicalizeBrand(car?.brand) || "-",
+        carPlate: car?.license_plate || "-",
+        carImage: getCarImageUrl(car, fallbackCars),
+        startDate: bookingData.start_date,
+        endDate: bookingData.end_date,
+        pickupLocation,
+        rentalFee,
+        vatAmount,
+        depositAmount,
+        totalRentalPrice,
+        remainingPayment,
+        rentalDays,
+      });
       setShowBookingForm(false);
-      setBookingData({
-        start_date: todayValue,
-        end_date: '',
-        pickup_location: ''
-      });
-      notifyUser('Gửi yêu cầu thành công, chúng tôi sẽ liên hệ sớm với bạn', "success");
+      setShowDepositTransfer(true);
     } catch (error) {
       setBookingError(error.message || 'Đặt xe thất bại. Vui lòng thử lại.');
     }
   };
 
+  const handleDepositPaidClick = async () => {
+    if (!depositTransferData || isSubmittingDeposit) return;
+
+    setIsSubmittingDeposit(true);
+    try {
+      setShowDepositTransfer(false);
+      setDepositTransferData(null);
+      setBookingData({
+        start_date: todayValue,
+        end_date: '',
+        pickup_location: ''
+      });
+      notifyUser("Đã gửi yêu cầu thuê xe. Chúng tôi sẽ kiểm tra thanh toán và phản hồi sớm nhất.", "success");
+    } catch (error) {
+      notifyUser(getReadableErrorMessage(error, "Không thể gửi yêu cầu thuê xe"), "error");
+    } finally {
+      setIsSubmittingDeposit(false);
+    }
+  };
+
+  const handleCopyDepositText = async (value, label = "Thông tin") => {
+    try {
+      await navigator.clipboard.writeText(String(value || ""));
+      notifyUser(`Đã sao chép ${label}.`, "success");
+    } catch {
+      notifyUser("Không thể sao chép tự động, vui lòng copy thủ công.", "error");
+    }
+  };
+
+  const depositTransferNote = depositTransferData?.bookingCode
+    ? `Dat coc ${depositTransferData.bookingCode}`
+    : "Dat coc tien thue xe";
+
   return (
     <div className="gf-page gf-detail-page">
-      <header className="gf-header">
-        <div className="gf-header-inner">
-          <Link to="/" className="gf-brand">
-            <span className="logo-icon"><img src="/image/brand/logo.png" alt="Phương Đông" /></span>
-            <span className="gf-brand-text">Thuê xe</span>
-          </Link>
-          <nav className="gf-nav">
-            <Link to="/" className="gf-nav-link">
-              Trang chủ
-            </Link>
-            <span className="gf-nav-sep">/</span>
-            <Link to="/thue-xe-tu-lai" className="gf-nav-link">
-              Thuê xe tự lái
-            </Link>
-            <span className="gf-nav-sep">/</span>
-            <span className="gf-nav-current">{title}</span>
-          </nav>
-          <div className="gf-header-cta">
-            <a className="login-btn" href="tel:0566999666">
-              Đặt xe: 0566 999 666
-            </a>
-          </div>
-        </div>
-      </header>
+      <PageHeader />
 
       <main className="gf-main">
         <div className="gf-main-inner">
@@ -470,7 +526,7 @@ export default function SelfDriveDetailPage() {
               <ul className="gf-list">
                 <li>CCCD/CMND còn hiệu lực</li>
                 <li>Bằng lái B1/B2 (tuỳ loại xe)</li>
-                <li>Đặt cọc theo quy định (tiền mặt/chuyển khoản)</li>
+                <li>Đặt cọc giữ chỗ theo quy định (chuyển khoản)</li>
               </ul>
             </div>
 
@@ -486,7 +542,7 @@ export default function SelfDriveDetailPage() {
             <div className="gf-detail-section">
               <h2>Hình thức thanh toán</h2>
               <ul className="gf-list">
-                <li>Thanh toán khi nhận xe sau khi nhân viên xác nhận thông tin đặt xe</li>
+                <li>Khách hàng thanh toán giữ chỗ sau khi xác nhận thông tin đặt xe</li>
                 <li>Khách hàng kiểm tra tình trạng xe, giấy tờ và lịch thuê trước khi thanh toán</li>
                 <li>Hỗ trợ thanh toán linh hoạt tại điểm nhận xe theo hướng dẫn của nhân viên</li>
               </ul>
@@ -514,7 +570,7 @@ export default function SelfDriveDetailPage() {
                   </div>
                   <div className="gf-card-title">
                     <h3>{c.name}</h3>
-                    <p className="gf-muted">{c.brand}</p>
+                    <p className="gf-muted">{canonicalizeBrand(c.brand) || "Hãng xe"}</p>
                   </div>
                   <div className="gf-card-media gf-card-media-img">
                     <img src={getCarImageUrl(c, fallbackCars)} alt={c.name} loading="lazy" />
@@ -749,7 +805,7 @@ export default function SelfDriveDetailPage() {
                     type="date"
                     min={todayValue}
                     value={bookingData.start_date}
-                    onChange={(e) => setBookingData({...bookingData, start_date: e.target.value})}
+                    onChange={(e) => setBookingData({...bookingData, start_date: sanitizeDateString(e.target.value)})}
                     required
                   />
                 </div>
@@ -760,7 +816,7 @@ export default function SelfDriveDetailPage() {
                     type="date"
                     min={bookingData.start_date || todayValue}
                     value={bookingData.end_date}
-                    onChange={(e) => setBookingData({...bookingData, end_date: e.target.value})}
+                    onChange={(e) => setBookingData({...bookingData, end_date: sanitizeDateString(e.target.value)})}
                     required
                   />
                 </div>
@@ -772,10 +828,25 @@ export default function SelfDriveDetailPage() {
                 <strong>{unitPrice.toLocaleString()} VND / ngày</strong>
                 <span>Số ngày thuê</span>
                 <strong>{rentalDays || "-"}{rentalDays ? " ngày" : ""}</strong>
-                <span>Tổng giá</span>
+                <span>Phí thuê xe</span>
+                <strong>{rentalFee ? `${rentalFee.toLocaleString()} VND` : "-"}</strong>
+                <span>Thuế VAT (8%)</span>
+                <strong>{vatAmount ? `${vatAmount.toLocaleString()} VND` : "-"}</strong>
+                <span>Tổng cộng tiền thuê</span>
                 <strong>{totalRentalPrice ? `${totalRentalPrice.toLocaleString()} VND` : "-"}</strong>
-                <span>Phương thức thanh toán</span>
-                <strong>Thanh toán khi nhận xe</strong>
+                <span>Thanh toán giữ chỗ</span>
+                <strong>{depositAmount ? `${depositAmount.toLocaleString()} VND` : "-"}</strong>
+                <span>Thanh toán khi nhận xe</span>
+                <strong>{totalRentalPrice ? `${remainingPayment.toLocaleString()} VND` : "-"}</strong>
+              </div>
+              <div className="booking-deposit-note">
+                <strong>Hướng dẫn thanh toán giữ chỗ</strong>
+                <span>
+                  Sau khi bấm Xác nhận, bạn sẽ thấy mã QR chuyển khoản tiền thanh toán giữ chỗ.
+                </span>
+                <span>
+                  Khi chuyển khoản xong, bấm Đã thanh toán để chúng tôi kiểm tra và phản hồi yêu cầu thuê xe.
+                </span>
               </div>
               
               {bookingError && (
@@ -791,25 +862,184 @@ export default function SelfDriveDetailPage() {
                   Hủy
                 </button>
                 <button type="submit" className="cta-button">
-                  Gửi yêu cầu
+                  Xác nhận
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+      {showDepositTransfer && depositTransferData ? (
+        <div className="modal-overlay" onClick={() => setShowDepositTransfer(false)}>
+          <div className="deposit-transfer-modal" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              className="modal-close"
+              onClick={() => setShowDepositTransfer(false)}
+              aria-label="Đóng"
+            >
+              ×
+            </button>
+            <div className="deposit-transfer-layout">
+              <section className="deposit-payment-panel">
+                <div className="deposit-hold-card">
+                  <span>Thanh toán phí giữ chỗ</span>
+                  <strong>{formatMoney(depositTransferData.depositAmount)}</strong>
+                  <p>Thời gian giữ chỗ còn lại</p>
+                  <div className="deposit-countdown">{formatCountdown(depositCountdown)}</div>
+                  <small>
+                    Mã yêu cầu của bạn <b>{depositTransferData.bookingCode}</b>
+                  </small>
+                  <div className="deposit-mini-summary">
+                    <div>
+                      <span>Loại xe:</span>
+                      <b>{depositTransferData.carName}</b>
+                    </div>
+                    <div>
+                      <span>Ngày nhận trả xe:</span>
+                      <b>{formatDateValue(depositTransferData.startDate)} tới {formatDateValue(depositTransferData.endDate)}</b>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="deposit-qr-section">
+                  <h4>Thanh toán bằng mã QR</h4>
+                  <p>Quét mã QR hoặc chụp màn hình QRCode để thanh toán bằng ứng dụng ngân hàng.</p>
+                  <div className="deposit-qr-card">
+                    <img
+                      src={getDepositQrUrl(depositTransferData.depositAmount, depositTransferNote)}
+                      alt="Mã QR chuyển khoản đặt cọc"
+                    />
+                  </div>
+                  <div className="deposit-or">hoặc</div>
+                  <h4>Chuyển khoản qua ngân hàng</h4>
+                  <p className="deposit-warning">Vui lòng nhập chính xác cú pháp chuyển khoản để hệ thống ghi nhận thông tin đơn hàng.</p>
+                  <div className="deposit-bank-card">
+                    <div>
+                      <span>Chủ tài khoản:</span>
+                      <strong>{DEPOSIT_ACCOUNT_NAME}</strong>
+                    </div>
+                    <div>
+                      <span>Ngân hàng:</span>
+                      <strong>MBBank ({DEPOSIT_BANK_CODE})</strong>
+                    </div>
+                    <div className="deposit-copy-row">
+                      <span>Số tài khoản:</span>
+                      <strong>{DEPOSIT_ACCOUNT_NO}</strong>
+                      <button type="button" onClick={() => handleCopyDepositText(DEPOSIT_ACCOUNT_NO, "số tài khoản")}>
+                        Sao chép
+                      </button>
+                    </div>
+                    <div className="deposit-copy-row">
+                      <span>Cú pháp CK:</span>
+                      <strong>{depositTransferNote}</strong>
+                      <button type="button" onClick={() => handleCopyDepositText(depositTransferNote, "nội dung chuyển khoản")}>
+                        Sao chép
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="deposit-order-panel">
+                <h3>Thông tin đơn thuê</h3>
+                <img className="deposit-order-image" src={depositTransferData.carImage} alt={depositTransferData.carName} />
+                <div className="deposit-order-info">
+                  <div>
+                    <span>Mã yêu cầu</span>
+                    <strong>{depositTransferData.bookingCode}</strong>
+                  </div>
+                  <div>
+                    <span>Tên khách thuê</span>
+                    <strong>{depositTransferData.customerName}</strong>
+                  </div>
+                  <div>
+                    <span>Số điện thoại</span>
+                    <strong>{depositTransferData.customerPhone}</strong>
+                  </div>
+                  <div>
+                    <span>Email</span>
+                    <strong>{depositTransferData.customerEmail}</strong>
+                  </div>
+                  <div>
+                    <span>Địa điểm nhận xe</span>
+                    <strong>{depositTransferData.pickupLocation}</strong>
+                  </div>
+                  <div>
+                    <span>Ngày nhận</span>
+                    <strong>{formatDateValue(depositTransferData.startDate)}</strong>
+                  </div>
+                  <div>
+                    <span>Ngày trả</span>
+                    <strong>{formatDateValue(depositTransferData.endDate)}</strong>
+                  </div>
+                  <div>
+                    <span>Hãng xe</span>
+                    <strong>{depositTransferData.carBrand}</strong>
+                  </div>
+                  <div>
+                    <span>Xe</span>
+                    <strong>{depositTransferData.carName}</strong>
+                  </div>
+                  <div>
+                    <span>Biển số</span>
+                    <strong>{depositTransferData.carPlate}</strong>
+                  </div>
+                  <div>
+                    <span>Phí thuê xe</span>
+                    <strong>{formatMoney(depositTransferData.rentalFee)}</strong>
+                  </div>
+                  <div>
+                    <span>Thuế VAT (8%)</span>
+                    <strong>{formatMoney(depositTransferData.vatAmount)}</strong>
+                  </div>
+                  <div className="deposit-total-row">
+                    <span>Tổng cộng tiền thuê xe</span>
+                    <strong>{formatMoney(depositTransferData.totalRentalPrice)}</strong>
+                    <small>Bạn sẽ thanh toán phần còn lại khi nhận xe.</small>
+                  </div>
+                </div>
+
+                <div className="deposit-steps">
+                  <h4>Các bước thanh toán</h4>
+                  <div className="deposit-step">
+                    <span>1</span>
+                    <div>
+                      <strong>Thanh toán giữ chỗ</strong>
+                      <small>Tiền này để xác nhận nhu cầu thuê xe và giữ xe.</small>
+                    </div>
+                    <b>{formatMoney(depositTransferData.depositAmount)}</b>
+                  </div>
+                  <div className="deposit-step">
+                    <span>2</span>
+                    <div>
+                      <strong>Thanh toán khi nhận xe</strong>
+                      <small>Phần tiền thuê còn lại thanh toán trực tiếp khi nhận xe.</small>
+                    </div>
+                    <b>{formatMoney(depositTransferData.remainingPayment)}</b>
+                  </div>
+                </div>
+              </section>
+            </div>
+            <div className="deposit-transfer-actions">
+              <button
+                type="button"
+                className="login-btn secondary"
+                onClick={() => {
+                  setShowDepositTransfer(false);
+                  setShowBookingForm(true);
+                }}
+              >
+                Quay lại
+              </button>
+              <button type="button" className="cta-button" onClick={handleDepositPaidClick} disabled={isSubmittingDeposit}>
+                {isSubmittingDeposit ? "Đang gửi..." : "Đã thanh toán"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <AppFooter />
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-

@@ -1,5 +1,6 @@
 from fastapi import Depends, Header, HTTPException, status
 from app.database import SessionLocal
+from app.security import verify_access_token
 
 
 def get_db():
@@ -10,20 +11,32 @@ def get_db():
         db.close()
 
 
-def get_current_user(x_user_role: str | None = Header(None, alias="X-User-Role")):
-    if not x_user_role:
+def get_current_user(authorization: str | None = Header(None, alias="Authorization")):
+    if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing X-User-Role header"
+            detail="Missing authorization token"
         )
 
-    if x_user_role not in ("admin", "staff"):
+    payload = verify_access_token(authorization.split(" ", 1)[1].strip())
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token"
+        )
+
+    role = payload.get("role")
+    if role not in ("admin", "staff"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid user role"
         )
 
-    return {"role": x_user_role}
+    return {
+        "role": role,
+        "user_id": payload.get("user_id"),
+        "username": payload.get("username"),
+    }
 
 
 def require_admin(user: dict = Depends(get_current_user)):

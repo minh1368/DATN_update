@@ -2,13 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import List
+from datetime import datetime, timedelta
 
 from app.dependencies import get_db, require_staff_or_admin, require_admin
 from app.models.customer import Customer
 from app.models.contract import Contract
 from app.models.user import User
 from app.schemas.customer import CustomerCreate, CustomerResponse
-from app.security import hash_password, is_password_hash
+from app.schemas.user import UserLogin, PasswordResetRequest, PasswordResetVerify, PasswordResetConfirm
+from app.security import hash_password, is_password_hash, verify_password, create_access_token
+from app.routers.user import generate_otp, send_reset_otp_email
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
 
@@ -29,37 +32,7 @@ def ensure_unique_customer_email(db: Session, email: str | None, customer_id: in
     if customer_id is not None:
         query = query.filter(Customer.customer_id != customer_id)
     if query.first():
-        raise HTTPException(status_code=400, detail="Email da duoc su dung")
-
-
-def sync_customer_user(db: Session, customer: Customer, password: str | None = None):
-    email = normalize_email(customer.email)
-    if not email:
-        return
-
-    user = db.query(User).filter(User.username.ilike(email)).first()
-    raw_password = password or customer.password or ""
-    user_password = hash_password(raw_password) if raw_password and not is_password_hash(raw_password) else raw_password
-
-    if user:
-        if user.role != "customer":
-            raise HTTPException(status_code=400, detail="Email da duoc su dung boi tai khoan quan tri/nhan vien")
-        user.name = customer.name
-        user.username = email
-        if user_password:
-            user.password = user_password
-        user.role = "customer"
-        return
-
-    if not raw_password:
-        return
-
-    db.add(User(
-        name=customer.name,
-        username=email,
-        password=user_password,
-        role="customer",
-    ))
+        raise HTTPException(status_code=400, detail="Email đã được sử dụng")
 
 
 @router.get("/", response_model=List[CustomerResponse])
@@ -81,7 +54,7 @@ def get_customers(db: Session = Depends(get_db), user: dict = Depends(require_st
 def get_customer_by_email(email: str, db: Session = Depends(get_db)):
     customer = db.query(Customer).filter(Customer.email == email).first()
     if not customer:
-        raise HTTPException(status_code=404, detail="Khach hang khong ton tai")
+        raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
     return customer
 
 
@@ -89,7 +62,7 @@ def get_customer_by_email(email: str, db: Session = Depends(get_db)):
 def get_customer(customer_id: int, db: Session = Depends(get_db)):
     customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
     if not customer:
-        raise HTTPException(status_code=404, detail="Khach hang khong ton tai")
+        raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
     return customer
 
 
@@ -97,21 +70,22 @@ def get_customer(customer_id: int, db: Session = Depends(get_db)):
 def create_customer(customer: CustomerCreate, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
     data = customer.model_dump()
     data["email"] = normalize_email(data.get("email"))
-    data["password"] = data.get("password") or ""
+    
+    raw_password = data.get("password") or ""
+    data["password"] = hash_password(raw_password) if raw_password else ""
+    
     ensure_unique_customer_email(db, data.get("email"))
     new_customer = Customer(**data)
     db.add(new_customer)
 
     try:
-        db.flush()
-        sync_customer_user(db, new_customer, data.get("password"))
         db.commit()
         db.refresh(new_customer)
     except IntegrityError:
         db.rollback()
         raise HTTPException(
             status_code=400,
-            detail="So dien thoai hoac email da ton tai"
+            detail="Số điện thoại hoặc email đã tồn tại"
         )
 
     return new_customer
@@ -121,21 +95,22 @@ def create_customer(customer: CustomerCreate, db: Session = Depends(get_db), use
 def create_customer_public(customer: CustomerCreate, db: Session = Depends(get_db)):
     data = customer.model_dump()
     data["email"] = normalize_email(data.get("email"))
-    data["password"] = data.get("password") or ""
+    
+    raw_password = data.get("password") or ""
+    data["password"] = hash_password(raw_password) if raw_password else ""
+    
     ensure_unique_customer_email(db, data.get("email"))
     new_customer = Customer(**data)
     db.add(new_customer)
 
     try:
-        db.flush()
-        sync_customer_user(db, new_customer, data.get("password"))
         db.commit()
         db.refresh(new_customer)
     except IntegrityError:
         db.rollback()
         raise HTTPException(
             status_code=400,
-            detail="So dien thoai hoac email da ton tai"
+            detail="Số điện thoại hoặc email đã tồn tại"
         )
 
     return new_customer
@@ -145,26 +120,29 @@ def create_customer_public(customer: CustomerCreate, db: Session = Depends(get_d
 def update_customer_profile(customer_id: int, customer_data: CustomerCreate, db: Session = Depends(get_db)):
     customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
     if not customer:
-        raise HTTPException(status_code=404, detail="Khach hang khong ton tai")
+        raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
 
     data = customer_data.model_dump()
     data["email"] = normalize_email(data.get("email"))
+    
     if data.get("password") is None or data.get("password") == "":
         data.pop("password", None)
+    else:
+        data["password"] = hash_password(data["password"])
+        
     ensure_unique_customer_email(db, data.get("email"), customer_id)
 
     for field, value in data.items():
         setattr(customer, field, value)
 
     try:
-        sync_customer_user(db, customer, data.get("password"))
         db.commit()
         db.refresh(customer)
     except IntegrityError:
         db.rollback()
         raise HTTPException(
             status_code=400,
-            detail="So dien thoai hoac email da ton tai"
+            detail="Số điện thoại hoặc email đã tồn tại"
         )
 
     return customer
@@ -174,26 +152,29 @@ def update_customer_profile(customer_id: int, customer_data: CustomerCreate, db:
 def update_customer(customer_id: int, customer_data: CustomerCreate, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
     customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
     if not customer:
-        raise HTTPException(status_code=404, detail="Khach hang khong ton tai")
+        raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
 
     data = customer_data.model_dump()
     data["email"] = normalize_email(data.get("email"))
+    
     if data.get("password") is None or data.get("password") == "":
         data.pop("password", None)
+    else:
+        data["password"] = hash_password(data["password"])
+        
     ensure_unique_customer_email(db, data.get("email"), customer_id)
 
     for field, value in data.items():
         setattr(customer, field, value)
 
     try:
-        sync_customer_user(db, customer, data.get("password"))
         db.commit()
         db.refresh(customer)
     except IntegrityError:
         db.rollback()
         raise HTTPException(
             status_code=400,
-            detail="So dien thoai hoac email da ton tai"
+            detail="Số điện thoại hoặc email đã tồn tại"
         )
 
     return customer
@@ -204,13 +185,104 @@ def delete_customer(customer_id: int, db: Session = Depends(get_db), user: dict 
     customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
 
     if not customer:
-        raise HTTPException(status_code=404, detail="Khach hang khong ton tai")
+        raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
 
     contracts = db.query(Contract).filter(Contract.customer_id == customer_id).first()
     if contracts:
-        raise HTTPException(status_code=400, detail="Khach hang co hop dong, khong the xoa")
+        raise HTTPException(status_code=400, detail="Khách hàng có hợp đồng, không thể xóa")
 
     db.delete(customer)
     db.commit()
 
-    return {"message": "Xoa thanh cong"}
+    return {"message": "Xóa thành công"}
+
+# Customer Auth Endpoints
+
+@router.post("/login", response_model=CustomerResponse)
+def login_customer(credentials: UserLogin, db: Session = Depends(get_db)):
+    email = normalize_email(credentials.username)
+    if not email:
+        raise HTTPException(status_code=400, detail="Email không hợp lệ")
+        
+    customer = db.query(Customer).filter(Customer.email.ilike(email)).first()
+    if not customer or not verify_password(credentials.password, customer.password):
+        raise HTTPException(status_code=401, detail="Tài khoản hoặc mật khẩu sai")
+
+    token = create_access_token({
+        "user_id": customer.customer_id,
+        "username": customer.email,
+        "role": "customer",
+    })
+    
+    customer.token = token
+    return customer
+
+
+@router.post("/reset-password/request")
+def request_customer_password_reset(payload: PasswordResetRequest, db: Session = Depends(get_db)):
+    email = normalize_email(payload.username)
+    customer = db.query(Customer).filter(Customer.email.ilike(email)).first()
+    otp = generate_otp()
+    expires_at = datetime.now() + timedelta(minutes=10)
+    
+    if customer:
+        customer.reset_otp = otp
+        customer.reset_otp_expires_at = expires_at
+        db.commit()
+        try:
+            send_reset_otp_email(customer.email, otp)
+        except RuntimeError as exc:
+            customer.reset_otp = None
+            customer.reset_otp_expires_at = None
+            db.commit()
+            raise HTTPException(status_code=500, detail=f"Lỗi gửi email OTP: {exc}")
+
+    return {"message": "Mã OTP đã được gửi, hãy kiểm tra email."}
+
+
+@router.post("/reset-password/verify")
+def verify_customer_password_reset(payload: PasswordResetVerify, db: Session = Depends(get_db)):
+    email = normalize_email(payload.username)
+    customer = db.query(Customer).filter(Customer.email.ilike(email)).first()
+    
+    if not customer or not customer.reset_otp or not customer.reset_otp_expires_at:
+        raise HTTPException(status_code=400, detail="Mã OTP không hợp lệ hoặc đã hết hạn.")
+        
+    if datetime.now() > customer.reset_otp_expires_at:
+        customer.reset_otp = None
+        customer.reset_otp_expires_at = None
+        db.commit()
+        raise HTTPException(status_code=400, detail="Mã OTP đã hết hạn. Vui lòng yêu cầu lại.")
+        
+    if payload.otp.strip() != customer.reset_otp:
+        raise HTTPException(status_code=400, detail="Mã OTP không đúng.")
+
+    return {"message": "Mã OTP hợp lệ."}
+
+
+@router.post("/reset-password/confirm")
+def confirm_customer_password_reset(payload: PasswordResetConfirm, db: Session = Depends(get_db)):
+    email = normalize_email(payload.username)
+    customer = db.query(Customer).filter(Customer.email.ilike(email)).first()
+    
+    if not customer or not customer.reset_otp or not customer.reset_otp_expires_at:
+        raise HTTPException(status_code=400, detail="Yêu cầu đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.")
+        
+    if datetime.now() > customer.reset_otp_expires_at:
+        customer.reset_otp = None
+        customer.reset_otp_expires_at = None
+        db.commit()
+        raise HTTPException(status_code=400, detail="Mã OTP đã hết hạn. Vui lòng yêu cầu lại.")
+        
+    if payload.otp.strip() != customer.reset_otp:
+        raise HTTPException(status_code=400, detail="Mã OTP không đúng.")
+        
+    if not payload.new_password or len(payload.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Mật khẩu mới phải có ít nhất 6 ký tự.")
+
+    customer.password = hash_password(payload.new_password)
+    customer.reset_otp = None
+    customer.reset_otp_expires_at = None
+    db.commit()
+    
+    return {"message": "Mật khẩu đã được đặt lại thành công."}

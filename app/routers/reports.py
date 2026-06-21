@@ -22,16 +22,19 @@ def summary(db: Session = Depends(get_db), user: dict = Depends(require_staff_or
     cars = db.query(Car).all()
 
     total_revenue = float(sum(payment.amount for payment in payments))
-    total_contracts = len({payment.contract_id for payment in payments})
+    total_contracts = len({payment.contract_id for payment in payments if payment.contract_id})
     total_cars = len(cars)
     cars_rented = sum(1 for car in cars if car.status == "rented")
     usage_rate = float(cars_rented) / total_cars if total_cars else 0.0
 
     monthly = defaultdict(float)
     for payment in payments:
-        contract = db.query(Contract).filter(Contract.contract_id == payment.contract_id).first()
+        contract = db.query(Contract).filter(Contract.contract_id == payment.contract_id).first() if payment.contract_id else None
         if contract and contract.start_date:
             month_key = contract.start_date.strftime("%Y-%m")
+        elif payment.request_id:
+            rental_request = db.query(RentalRequest).filter(RentalRequest.request_id == payment.request_id).first()
+            month_key = rental_request.start_date.strftime("%Y-%m") if rental_request and rental_request.start_date else datetime.now().strftime("%Y-%m")
         else:
             month_key = datetime.now().strftime("%Y-%m")
         monthly[month_key] += float(payment.amount)
@@ -50,7 +53,7 @@ def summary(db: Session = Depends(get_db), user: dict = Depends(require_staff_or
 @router.get("/export-csv")
 def export_csv(db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
     payments = db.query(Payment).all()
-    headers = ["payment_id", "contract_id", "amount", "method", "status"]
+    headers = ["payment_id", "contract_id", "request_id", "payment_type", "amount", "total_amount", "remaining_amount", "status"]
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -59,8 +62,11 @@ def export_csv(db: Session = Depends(get_db), user: dict = Depends(require_staff
         writer.writerow([
             payment.payment_id,
             payment.contract_id,
-            float(payment.amount),
-            payment.method,
+            payment.request_id,
+            payment.payment_type,
+            float(payment.amount or 0),
+            float(payment.total_amount or 0),
+            float(payment.remaining_amount or 0),
             payment.status,
         ])
 
@@ -77,15 +83,18 @@ def export_excel(db: Session = Depends(get_db), user: dict = Depends(require_sta
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Payments"
-    headers = ["payment_id", "contract_id", "amount", "method", "status"]
+    headers = ["payment_id", "contract_id", "request_id", "payment_type", "amount", "total_amount", "remaining_amount", "status"]
     sheet.append(headers)
 
     for payment in payments:
         sheet.append([
             payment.payment_id,
             payment.contract_id,
-            float(payment.amount),
-            payment.method,
+            payment.request_id,
+            payment.payment_type,
+            float(payment.amount or 0),
+            float(payment.total_amount or 0),
+            float(payment.remaining_amount or 0),
             payment.status,
         ])
 

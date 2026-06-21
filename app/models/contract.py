@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey, Date, Numeric, String
+from sqlalchemy import Column, Integer, ForeignKey, Date, Numeric, String, DateTime
 from app.database import Base
 
 class Contract(Base):
@@ -16,3 +16,9 @@ class Contract(Base):
     total_price = Column(Numeric)
 
     status = Column(String, default="pending")  # pending / approved / rejected
+    invoice_code = Column(String, nullable=True)
+    invoice_status = Column(String, default="not_issued")
+    invoice_issued_at = Column(DateTime, nullable=True)
+    customer_signed_at = Column(DateTime, nullable=True)
+    staff_signed_at = Column(DateTime, nullable=True)
+    signature_status = Column(String, default="unsigned")

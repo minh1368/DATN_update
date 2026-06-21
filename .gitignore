@@ -5,6 +5,10 @@ frontend/.env
 *.err
 __pycache__/
 *.py[cod]
+.pytest_cache/
+sqlite.db
+*.db
+scratch_check_*.py
 tmp_*.py
 frontend/tmp_*.py
 node_modules/

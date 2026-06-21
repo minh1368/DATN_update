@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime
 
-from app.dependencies import get_db, require_staff_or_admin
+from app.dependencies import get_db, require_admin, require_staff_or_admin
 from app.models.payment import Payment
 from app.models.contract import Contract
-from app.schemas.payment import PaymentCreate, PaymentResponse
+from app.models.rental_request import RentalRequest
+from app.schemas.payment import PaymentCreate, PaymentRejectPayload, PaymentResponse
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
@@ -20,20 +22,22 @@ def create_payment(data: PaymentCreate, db: Session = Depends(get_db), user: dic
     contract = db.query(Contract).filter(Contract.contract_id == data.contract_id).first()
 
     if not contract:
-        raise HTTPException(status_code=404, detail="Contract khong ton tai")
+        raise HTTPException(status_code=404, detail="Contract không tồn tại")
 
     if contract.status != "approved":
-        raise HTTPException(status_code=400, detail="Contract chua duoc duyet")
+        raise HTTPException(status_code=400, detail="Contract chưa được duyệt")
 
     existing = db.query(Payment).filter(Payment.contract_id == data.contract_id).first()
 
     if existing:
-        raise HTTPException(status_code=400, detail="Da ton tai payment")
+        raise HTTPException(status_code=400, detail="Đã tồn tại payment")
 
     payment = Payment(
         contract_id=data.contract_id,
         amount=contract.total_price,
-        method=data.method,
+        total_amount=contract.total_price,
+        remaining_amount=contract.total_price,
+        payment_type="rental",
         status="unpaid",
     )
 
@@ -49,20 +53,79 @@ def pay(payment_id: int, db: Session = Depends(get_db), user: dict = Depends(req
     payment = db.query(Payment).filter(Payment.payment_id == payment_id).first()
 
     if not payment:
-        raise HTTPException(404, "Payment khong ton tai")
+        raise HTTPException(404, "Payment không tồn tại")
 
     if payment.status == "paid":
-        raise HTTPException(400, "Da thanh toan")
+        raise HTTPException(400, "Đã thanh toán")
+    if payment.status == "refunded":
+        raise HTTPException(400, "Khoản thanh toán đã hoàn tiền")
 
     payment.status = "paid"
+    payment.paid_at = datetime.utcnow()
+
+    if payment.request_id and payment.payment_type == "deposit":
+        rental_request = db.query(RentalRequest).filter(RentalRequest.request_id == payment.request_id).first()
+        if rental_request and rental_request.status == "deposit_pending":
+            rental_request.status = "pending"
 
     db.commit()
 
-    return {"message": "Thanh toan thanh cong"}
+    return {"message": "Thanh toán thành công"}
+
+
+@router.put("/{payment_id}/refund")
+def refund(payment_id: int, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
+    payment = db.query(Payment).filter(Payment.payment_id == payment_id).first()
+
+    if not payment:
+        raise HTTPException(404, "Payment không tồn tại")
+
+    if payment.payment_type != "deposit":
+        raise HTTPException(400, "Chỉ hoàn tiền cho khoản đặt cọc")
+
+    if payment.status != "refund_pending":
+        raise HTTPException(400, "Khoản đặt cọc chưa ở trạng thái chờ hoàn")
+    if not payment.paid_at:
+        raise HTTPException(400, "Khoản đặt cọc chưa được xác nhận thanh toán")
+
+    payment.status = "refunded"
+    payment.note = "Đã hoàn tiền cọc"
+
+    db.commit()
+
+    return {"message": "Đã hoàn tiền cọc"}
+
+
+@router.put("/{payment_id}/reject")
+def reject_payment(
+    payment_id: int,
+    payload: PaymentRejectPayload | None = None,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_staff_or_admin),
+):
+    payment = db.query(Payment).filter(Payment.payment_id == payment_id).first()
+
+    if not payment:
+        raise HTTPException(404, "Payment không tồn tại")
+
+    if payment.status in ["paid", "refunded"]:
+        raise HTTPException(400, "Khoản này đã được xử lý")
+
+    reason = (payload.reason or "").strip() if payload else ""
+    payment.status = "rejected"
+    payment.note = reason or "Chưa nhận được tiền"
+    if payment.request_id:
+        rental_request = db.query(RentalRequest).filter(RentalRequest.request_id == payment.request_id).first()
+        if rental_request and rental_request.status != "rejected":
+            rental_request.status = "rejected"
+
+    db.commit()
+
+    return {"message": "Đã đánh dấu chưa nhận được tiền"}
 
 
 @router.delete("/{payment_id}")
-def delete_payment(payment_id: int, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
+def delete_payment(payment_id: int, db: Session = Depends(get_db), user: dict = Depends(require_admin)):
     payment = db.query(Payment).filter(Payment.payment_id == payment_id).first()
 
     if not payment:

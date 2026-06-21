@@ -66,6 +66,44 @@ Nếu backend chạy port khác, tạo file `frontend/.env`:
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
+## Demo public bằng trycloudflare
+
+Chạy backend và frontend ở local như hướng dẫn trên, sau đó mở tunnel cho frontend:
+
+```powershell
+cloudflared tunnel --url http://localhost:5173
+```
+
+Nếu cần public backend riêng, mở thêm một tunnel khác:
+
+```powershell
+cloudflared tunnel --url http://localhost:8000
+```
+
+Khi dùng tunnel backend riêng, cập nhật `frontend/.env`:
+
+```text
+VITE_API_BASE_URL=https://duong-dan-backend.trycloudflare.com
+```
+
+Sau đó khởi động lại frontend bằng `npm run dev`.
+
+Nếu muốn gửi email OTP quên mật khẩu thật, thêm các biến môi trường SMTP vào file `.env` ở thư mục gốc:
+
+```text
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=you@example.com
+SMTP_PASSWORD=mat-khau-ung-dung-hoac-password
+SMTP_FROM=you@example.com
+SMTP_USE_TLS=true
+SMTP_USE_SSL=false
+```
+
+`SMTP_USERNAME`/`SMTP_PASSWORD` chỉ là tài khoản gửi email. Backend sẽ gửi mã OTP đến email của người dùng đã đăng ký yêu cầu quên mật khẩu, nên chức năng này áp dụng cho tất cả email người dùng thực tế.
+
+Với Gmail, hãy sử dụng App Password hoặc cấu hình SMTP an toàn tương thích. Nếu bạn dùng `smtp.gmail.com`, mật khẩu phải là App Password chứ không phải mật khẩu đăng nhập Gmail thông thường.
+
 ## Dữ liệu mẫu
 
 Import danh sách xe mẫu:
@@ -102,22 +140,8 @@ OPENROUTER_API_KEY=...
 
 Nếu không cấu hình API key, chức năng AI Chat sẽ trả thông báo chưa cấu hình.
 
-## Chạy test
-
-```powershell
-python -m unittest discover -s tests -v
-```
-
-Nếu đã cài `pytest`, cũng có thể chạy:
-
-```powershell
-python -m pytest
-```
-
-Các test hiện dùng SQLite tạm thời, không ảnh hưởng database PostgreSQL thật.
-
 ## Ghi chú bảo mật
 
 - Mật khẩu user/customer mới được hash bằng PBKDF2-SHA256.
 - Dữ liệu mật khẩu cũ dạng plain text vẫn đăng nhập được một lần, sau đó tự chuyển sang dạng hash.
-- Phân quyền hiện vẫn ở mức demo qua `X-User-Role`; hướng phát triển tiếp theo là JWT/session bảo mật.
+- Phân quyền quản trị dùng JWT Bearer token; frontend không còn gửi quyền qua `X-User-Role`.

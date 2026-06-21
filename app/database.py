@@ -4,6 +4,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import StaticPool
 
+from app.env_loader import load_env_file
+
+load_env_file()
+
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:123456@localhost/car_rental")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)

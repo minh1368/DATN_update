@@ -1,6 +1,5 @@
-import { Link } from "react-router-dom";
-import "../App.css";
 import AppFooter from "../components/AppFooter.jsx";
+import PageHeader from "../components/PageHeader.jsx";
 
 const benefits = [
   {
@@ -31,22 +30,7 @@ const vehicleGroups = [
 export default function ChauffeurDrivePage() {
   return (
     <div className="gf-page chauffeur-page">
-      <header className="gf-header">
-        <div className="gf-header-inner">
-          <Link to="/" className="gf-brand">
-            <span className="logo-icon"><img src="/image/brand/logo.png" alt="Phương Đông" /></span>
-            <span className="gf-brand-text">Thuê xe</span>
-          </Link>
-          <nav className="gf-nav">
-            <Link to="/" className="gf-nav-link">Trang chủ</Link>
-            <span className="gf-nav-sep">/</span>
-            <span className="gf-nav-current">Thuê xe có lái</span>
-          </nav>
-          <div className="gf-header-cta">
-            <a className="login-btn" href="tel:0566999666">Hotline: 0566 999 666</a>
-          </div>
-        </div>
-      </header>
+      <PageHeader />
 
       <section className="chauffeur-hero">
         <div className="chauffeur-hero-overlay" />
@@ -59,8 +43,7 @@ export default function ChauffeurDrivePage() {
               tài xế chuyên nghiệp và lịch trình linh hoạt.
             </p>
             <div className="chauffeur-hero-actions">
-              <a className="cta-button" href="tel:0566999666">Tư vấn ngay</a>
-              <a className="login-btn secondary" href="#chauffeur-contact">Nhận báo giá</a>
+              <a className="cta-button" href="#chauffeur-contact">Nhận tư vấn</a>
             </div>
           </div>
         </div>
