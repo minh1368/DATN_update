@@ -178,16 +178,14 @@ export default function ProfilePage() {
     if (["approved", "active", "rented"].includes(contractStatus)) return "active";
     if (contractStatus === "completed") return "completed";
     if (requestStatus === "rejected" || depositStatus === "rejected" || remainingStatus === "rejected") return "rejected";
-    if (["deposit_pending", "pending"].includes(requestStatus)) return "pending";
+    if (requestStatus === "pending") return "pending";
     if (depositStatus === "paid" && remainingStatus === "paid") return "ready_contract";
     if (requestStatus === "approved") return "payment_pending";
-    if (requestStatus === "completed") return "completed";
     return requestStatus || "-";
   };
 
   const formatRentalStatus = (status) => {
     const normalized = String(status || "").toLowerCase();
-    if (normalized === "deposit_pending") return "Chờ duyệt";
     if (normalized === "pending") return "Chờ duyệt";
     if (normalized === "awaiting_payment" || normalized === "payment_pending") return "Chờ xác nhận thanh toán";
     if (normalized === "ready_contract") return "Chờ tạo hợp đồng";
@@ -219,16 +217,13 @@ export default function ProfilePage() {
     const normalized = String(status || "").trim().toLowerCase();
     if (normalized === "paid") return "Đã thanh toán";
     if (normalized === "rejected") return "Chưa nhận được";
-    if (normalized === "refund_pending") return "Chờ hoàn cọc";
-    if (normalized === "refunded") return "Đã hoàn cọc";
-    if (normalized === "cancelled") return "Đã hủy";
-    if (["pending", "unpaid"].includes(normalized)) return "Chờ xác nhận thanh toán";
+    if (normalized === "unpaid") return "Chờ xác nhận thanh toán";
     return status || "-";
   };
 
   const getRentalPaymentMarker = (status) => {
     const normalized = String(status || "").trim().toLowerCase();
-    return ["paid", "refunded"].includes(normalized) ? "✓" : "○";
+    return normalized === "paid" ? "✓" : "○";
   };
 
   const getRejectReasonFromRental = (rental) => {
@@ -237,7 +232,7 @@ export default function ProfilePage() {
       if (!reason) return "";
       const prefix = "Lý do từ chối:";
       if (reason.startsWith(prefix)) reason = reason.slice(prefix.length).trim();
-      return reason.split(". Cần hoàn tiền cọc")[0].trim();
+      return reason.trim();
     };
 
     return cleanReason(rental?.reject_reason) ||

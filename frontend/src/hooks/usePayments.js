@@ -158,11 +158,6 @@ export default function usePayments({
           ? "Đã từ chối và gửi thông báo cho khách hàng."
           : "Đã đánh dấu chưa nhận được tiền.",
       },
-      refund: {
-        mutation: () => paymentService.refund(paymentId, headers),
-        patch: { status: "refunded", note: "Đã hoàn tiền cọc" },
-        message: "Đã hoàn cọc.",
-      },
     };
     const config = actionMap[action];
     if (!config) return;

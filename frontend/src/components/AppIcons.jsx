@@ -74,44 +74,11 @@ export function PaymentActionIcon({ type }) {
     );
   }
 
-  if (type === "refund") {
-    return (
-      <svg className="table-action-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M7.5 7.5h8a4.5 4.5 0 0 1 0 9H7" />
-        <path d="M7.5 7.5 4.8 10.2 7.5 13" />
-        <path d="M12 10.2v4.2" />
-        <path d="M10.4 11.2c.4-.6 1-.9 1.8-.9 1 0 1.8.5 1.8 1.3 0 .9-.8 1.2-1.8 1.5-.9.2-1.6.5-1.6 1.2 0 .8.8 1.2 1.8 1.2.8 0 1.5-.3 2-.9" />
-      </svg>
-    );
-  }
-
   if (type === "view") {
     return (
       <svg className="table-action-icon" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M2.8 12s3.4-5.8 9.2-5.8S21.2 12 21.2 12s-3.4 5.8-9.2 5.8S2.8 12 2.8 12Z" />
         <circle cx="12" cy="12" r="2.8" />
-      </svg>
-    );
-  }
-
-  if (type === "invoice") {
-    return (
-      <svg className="table-action-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M6 3.8h10.5L20 7.3v16.5l-2.6-1.4-2.6 1.4-2.6-1.4-2.6 1.4-2.6-1.4L4 23.8V5.8a2 2 0 0 1 2-2Z" />
-        <path d="M16.5 3.8v3.7H20" />
-        <path d="M8 10h8M8 13h8M8 16h4.8" />
-      </svg>
-    );
-  }
-
-  if (type === "sign") {
-    return (
-      <svg className="table-action-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M5 19.5h14" />
-        <path d="M6.5 15.5c2.7-5.9 5.1-7.7 7.1-5.3 1.1 1.3-.4 3.6-2.2 3.6-1.3 0-1.9-.9-1.4-2.2" />
-        <path d="M13.7 14.2c1.1-1 2.2-1.3 3.3-.8 1 .5 1.8.3 2.5-.5" />
-        <path d="m15.5 4.7 1.8-1.8 3.1 3.1-1.8 1.8" />
-        <path d="m15.5 4.7-4.2 4.2-.6 2.5 2.5-.6 4.2-4.2" />
       </svg>
     );
   }

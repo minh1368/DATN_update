@@ -9,7 +9,7 @@ from app.models.rental_request import RentalRequest
 from app.models.car import Car
 from app.models.payment import Payment
 from app.models.contract import Contract
-from app.rental_availability import has_overlapping_booking
+from app.rental_availability import has_overlapping_booking, has_overlapping_customer_booking
 from app.schemas.rental_request import RentalRequestCreate, RentalRequestResponse
 
 router = APIRouter(prefix="/rental_requests", tags=["Rental Requests"])
@@ -57,7 +57,7 @@ def create_deposit_payment(db: Session, rental_request: RentalRequest, total_amo
 def create_remaining_payment(db: Session, rental_request: RentalRequest, deposit: Payment | None) -> None:
     existing = db.query(Payment).filter(
         Payment.request_id == rental_request.request_id,
-        Payment.payment_type.in_(["remaining", "rental"]),
+        Payment.payment_type == "remaining",
     ).first()
     if existing:
         return
@@ -99,7 +99,7 @@ def get_request_details_by_customer(customer_id: int, db: Session = Depends(get_
         ).first()
         remaining = db.query(Payment).filter(
             Payment.request_id == item.request_id,
-            Payment.payment_type.in_(["remaining", "rental"]),
+            Payment.payment_type == "remaining",
         ).first()
         contract = db.query(Contract).filter(Contract.request_id == item.request_id).first()
         reject_reason = ""
@@ -107,7 +107,7 @@ def get_request_details_by_customer(customer_id: int, db: Session = Depends(get_
             (
                 payment
                 for payment in (remaining, deposit)
-                if payment and payment.status in ["rejected", "cancelled", "refund_pending"] and payment.note
+                if payment and payment.status == "rejected" and payment.note
             ),
             None,
         )
@@ -117,7 +117,6 @@ def get_request_details_by_customer(customer_id: int, db: Session = Depends(get_
                 prefix = "Lý do từ chối:"
                 if reject_reason.startswith(prefix):
                     reject_reason = reject_reason[len(prefix):].strip()
-                reject_reason = reject_reason.split(". Cần hoàn tiền cọc")[0].strip()
         results.append({
             "request_id": item.request_id,
             "customer_id": item.customer_id,
@@ -161,8 +160,11 @@ def create_request(req: RentalRequestCreate, db: Session = Depends(get_db), user
     if has_overlapping_booking(db, req.car_id, req.start_date, req.end_date):
         raise HTTPException(status_code=400, detail="Xe đã có lịch thuê trong khoảng thời gian này")
 
+    if has_overlapping_customer_booking(db, req.customer_id, req.start_date, req.end_date):
+        raise HTTPException(status_code=400, detail="Khách hàng đã có lịch thuê xe trong khoảng thời gian này")
+
     total_amount = calculate_rental_total(car, req)
-    new_req = RentalRequest(**req.model_dump(), status="deposit_pending")
+    new_req = RentalRequest(**req.model_dump(), status="pending")
     db.add(new_req)
     db.flush()
     create_deposit_payment(db, new_req, total_amount)
@@ -183,34 +185,17 @@ def create_customer_request(req: RentalRequestCreate, db: Session = Depends(get_
     if req.start_date > req.end_date:
         raise HTTPException(status_code=400, detail="Ngày kết thúc không được trước ngày bắt đầu")
 
-    completed_contract_request_ids = db.query(Contract.request_id).filter(
-        Contract.car_id == req.car_id,
-        Contract.status == "completed",
-    )
-    inactive_payment_request_ids = db.query(Payment.request_id).filter(
-        Payment.request_id.isnot(None),
-        Payment.status.in_(["rejected", "cancelled", "refunded"]),
-    )
-    duplicate = db.query(RentalRequest).filter(
-        RentalRequest.customer_id == req.customer_id,
-        RentalRequest.car_id == req.car_id,
-        RentalRequest.status.in_(("deposit_pending", "pending", "approved")),
-        RentalRequest.start_date <= req.end_date,
-        RentalRequest.end_date >= req.start_date,
-        ~RentalRequest.request_id.in_(completed_contract_request_ids),
-        ~RentalRequest.request_id.in_(inactive_payment_request_ids),
-    ).first()
-    if duplicate:
+    if has_overlapping_customer_booking(db, req.customer_id, req.start_date, req.end_date):
         raise HTTPException(
             status_code=400,
-            detail="Bạn đã có yêu cầu thuê xe này trong khoảng thời gian này. Vui lòng hoàn kiểm tra lại.",
+            detail="Bạn đã có lịch thuê xe trong khoảng thời gian này. Vui lòng chọn thời gian khác.",
         )
 
     if has_overlapping_booking(db, req.car_id, req.start_date, req.end_date):
         raise HTTPException(status_code=400, detail="Xe đã có lịch thuê trong khoảng thời gian này")
 
     total_amount = calculate_rental_total(car, req)
-    new_req = RentalRequest(**req.model_dump(), status="deposit_pending")
+    new_req = RentalRequest(**req.model_dump(), status="pending")
     db.add(new_req)
     db.flush()
     create_deposit_payment(db, new_req, total_amount)
@@ -278,14 +263,8 @@ def reject_request(
         Payment.payment_type == "deposit",
     ).first()
     if deposit:
-        if deposit.status == "paid":
-            deposit.status = "refund_pending"
-            deposit.note = f"{reject_note}. Cần hoàn tiền cọc"
-        elif deposit.status in ["pending", "unpaid"]:
-            deposit.status = "cancelled"
-            deposit.note = reject_note
-        elif deposit.status not in ["refunded"]:
-            deposit.note = reject_note
+        deposit.status = "rejected"
+        deposit.note = reject_note
     db.commit()
     
     return {"message": "Đã từ chối yêu cầu"}

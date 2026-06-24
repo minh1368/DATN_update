@@ -26,7 +26,12 @@ def get_car_detail(car_id: int, db: Session = Depends(get_db)):
 # POST car
 @router.post("/", response_model=CarResponse)
 def create_car(car: CarCreate, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
+    license_plate = car.license_plate.strip()
+    if db.query(Car).filter(Car.license_plate == license_plate).first():
+        raise HTTPException(status_code=400, detail="Biển số xe đã tồn tại")
+
     new_car = Car(**car.model_dump())
+    new_car.license_plate = license_plate
     db.add(new_car)
 
     try:
@@ -48,11 +53,24 @@ def update_car(car_id: int, car_data: CarCreate, db: Session = Depends(get_db), 
     if not car:
         raise HTTPException(status_code=404, detail="Car not found")
 
+    license_plate = car_data.license_plate.strip()
+    duplicate = db.query(Car).filter(
+        Car.license_plate == license_plate,
+        Car.car_id != car_id,
+    ).first()
+    if duplicate:
+        raise HTTPException(status_code=400, detail="Biển số xe đã tồn tại")
+
     for field, value in car_data.model_dump().items():
         setattr(car, field, value)
+    car.license_plate = license_plate
 
-    db.commit()
-    db.refresh(car)
+    try:
+        db.commit()
+        db.refresh(car)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Biển số xe đã tồn tại")
     return car
 
 # DELETE car

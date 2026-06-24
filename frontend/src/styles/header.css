@@ -2593,8 +2593,7 @@ tbody tr:hover {
   border: 1px solid rgba(255, 255, 255, 0.09);
 }
 
-.payment-detail-item.status-paid,
-.payment-detail-item.status-refunded {
+.payment-detail-item.status-paid {
   border-color: rgba(0, 219, 132, 0.28);
   background: rgba(0, 219, 132, 0.08);
 }
@@ -2661,19 +2660,7 @@ tbody tr:hover {
   border-color: rgba(255, 209, 102, 0.22);
 }
 
-.payment-status-pill.status-refund_pending {
-  color: #ffb86c;
-  background: rgba(255, 184, 108, 0.14);
-  border-color: rgba(255, 184, 108, 0.24);
-}
-
-.payment-status-pill.status-refunded {
-  color: #78dce8;
-  background: rgba(120, 220, 232, 0.14);
-  border-color: rgba(120, 220, 232, 0.24);
-}
-
-.payment-status-pill.status-cancelled {
+.payment-status-pill.status-rejected {
   color: #ff6b6b;
   background: rgba(255, 107, 107, 0.14);
   border-color: rgba(255, 107, 107, 0.24);
@@ -3256,7 +3243,6 @@ tbody tr:hover {
   white-space: nowrap;
 }
 
-.request-status-pill.status-deposit_pending,
 .request-status-pill.status-pending {
   color: #ffd166;
   background: rgba(255, 209, 102, 0.13);

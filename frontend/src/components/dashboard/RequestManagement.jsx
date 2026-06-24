@@ -39,10 +39,6 @@ export default function RequestManagement({
     const endDate = request?.end_date || "-";
     return `${startDate} → ${endDate}`;
   };
-  const getRequestTableStatus = (status) => {
-    const normalizedStatus = String(status || "").toLowerCase();
-    return normalizedStatus === "completed" ? "approved" : status;
-  };
   const filteredRequests = [...requests]
     .filter((request) => isItemInDateRange(request, requestStartFilter, requestEndFilter))
     .filter((request) => {
@@ -54,7 +50,7 @@ export default function RequestManagement({
       if (!requestStatusFilter) return true;
       const normalizedStatus = String(request.status || "").toLowerCase();
       if (requestStatusFilter === "waiting_confirmation") {
-        return ["deposit_pending", "pending"].includes(normalizedStatus);
+        return normalizedStatus === "pending";
       }
       return normalizedStatus === requestStatusFilter;
     })
@@ -160,7 +156,6 @@ export default function RequestManagement({
           {pagedRequests.map((request, index) => {
             const customer = customerById.get(Number(request.customer_id));
             const car = carById.get(Number(request.car_id));
-            const tableStatus = getRequestTableStatus(request.status);
             return (
               <tr key={request.request_id}>
                 <td>{(safePage - 1) * 10 + index + 1}</td>
@@ -169,8 +164,8 @@ export default function RequestManagement({
                 <td>{car?.name || "-"}</td>
                 <td>{getRequestDateRange(request)}</td>
                 <td>
-                  <span className={`request-status-pill status-${String(tableStatus || "").toLowerCase()}`}>
-                    {formatRequestStatus(tableStatus)}
+                  <span className={`request-status-pill status-${String(request.status || "").toLowerCase()}`}>
+                    {formatRequestStatus(request.status)}
                   </span>
                 </td>
                 <td>

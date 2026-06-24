@@ -43,6 +43,7 @@ export default function useNotifications({
   const customerReadyRef = useRef(false);
   const customerPaymentReadyRef = useRef(false);
   const customerPaymentSuccessReadyRef = useRef(false);
+  const customerContractCompleteReadyRef = useRef(false);
 
   const customerId = getStoredCustomerId();
   const storageKey = canAccessDashboard
@@ -166,6 +167,7 @@ export default function useNotifications({
 
     const paymentSeenKey = `customerPaymentRejectNotifications:${customerId}`;
     const paymentSuccessSeenKey = `customerPaymentSuccessNotifications:${customerId}`;
+    const contractCompleteSeenKey = `customerContractCompleteNotifications:${customerId}`;
 
     const loadCustomerRentalNotifications = async () => {
       try {
@@ -178,7 +180,7 @@ export default function useNotifications({
         onCustomerData?.(rentalRequests);
 
         const processedRequests = rentalRequests.filter((item) =>
-          ["approved", "completed", "rejected"].includes(String(item.status || "").toLowerCase())
+          ["approved", "rejected"].includes(String(item.status || "").toLowerCase())
         );
         const seen = new Set(JSON.parse(localStorage.getItem(seenKey) || "[]").map(String));
         const ids = processedRequests
@@ -200,6 +202,9 @@ export default function useNotifications({
         const paymentSuccessSeen = new Set(JSON.parse(localStorage.getItem(paymentSuccessSeenKey) || "[]").map(String));
         const paymentSuccessEvents = [];
         const existingPaymentSuccessEventIds = [];
+        const contractCompleteSeen = new Set(JSON.parse(localStorage.getItem(contractCompleteSeenKey) || "[]").map(String));
+        const contractCompleteEvents = [];
+        const existingContractCompleteEventIds = [];
         rentalDetails.forEach((item) => {
           ["deposit", "remaining"].forEach((paymentType) => {
             const paymentInfo = item.payments?.[paymentType];
@@ -216,6 +221,19 @@ export default function useNotifications({
               });
             }
           });
+
+          const contractStatus = String(item.contract_status || "").toLowerCase();
+          if (contractStatus === "completed" && item.request_id) {
+            const completeEventId = `${item.request_id}:contract-completed`;
+            existingContractCompleteEventIds.push(completeEventId);
+            if (!contractCompleteSeen.has(completeEventId)) {
+              contractCompleteEvents.push({
+                eventId: completeEventId,
+                requestId: item.request_id,
+                updatedAt: item.contract_updated_at || item.updated_at,
+              });
+            }
+          }
 
           const depositStatus = String(item.payments?.deposit?.status || "").toLowerCase();
           const remainingStatus = String(item.payments?.remaining?.status || "").toLowerCase();
@@ -262,20 +280,27 @@ export default function useNotifications({
           );
         }
 
+        const wasContractCompleteReady = customerContractCompleteReadyRef.current;
+        if (!wasContractCompleteReady) {
+          localStorage.setItem(
+            contractCompleteSeenKey,
+            JSON.stringify(Array.from(new Set([...contractCompleteSeen, ...existingContractCompleteEventIds]))),
+          );
+          customerContractCompleteReadyRef.current = true;
+        } else if (contractCompleteEvents.length > 0) {
+          localStorage.setItem(
+            contractCompleteSeenKey,
+            JSON.stringify(Array.from(new Set([
+              ...contractCompleteSeen,
+              ...contractCompleteEvents.map((event) => event.eventId),
+            ]))),
+          );
+        }
+
         if (!alive) return;
 
         newlyProcessed.forEach((item) => {
           const status = String(item.status || "").toLowerCase();
-          if (status === "completed") {
-            addNotification({
-              id: `customer-${status}-${item.request_id}`,
-              title: "Trả xe thành công",
-              message: `Yêu cầu thuê xe #${item.request_id} đã hoàn tất. Cảm ơn bạn đã sử dụng dịch vụ.`,
-              createdAt: item.updated_at || new Date().toISOString(),
-            });
-            notify?.("Trả xe thành công.", "success");
-            return;
-          }
 
           const isRejected = status === "rejected";
           addNotification({
@@ -293,6 +318,18 @@ export default function useNotifications({
             isRejected ? "error" : "info",
           );
         });
+
+        if (wasContractCompleteReady) {
+          contractCompleteEvents.forEach((event) => {
+            addNotification({
+              id: `customer-contract-completed-${event.eventId}`,
+              title: "Trả xe thành công",
+              message: `Yêu cầu thuê xe #${event.requestId} đã hoàn tất. Cảm ơn bạn đã sử dụng dịch vụ.`,
+              createdAt: event.updatedAt || new Date().toISOString(),
+            });
+            notify?.("Trả xe thành công.", "success");
+          });
+        }
 
         if (wasPaymentSuccessReady) {
           paymentSuccessEvents.forEach((event) => {

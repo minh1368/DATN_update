@@ -17,7 +17,6 @@ from app.schemas.user import (
     PasswordResetVerify,
     UserCreate,
     UserLogin,
-    UserRegister,
     UserResponse,
 )
 from app.security import create_access_token, hash_password, is_password_hash, verify_password
@@ -25,8 +24,8 @@ from app.security import create_access_token, hash_password, is_password_hash, v
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
-def normalize_username(username: str) -> str:
-    return username.strip().lower()
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
 
 
 def generate_otp() -> str:
@@ -73,13 +72,13 @@ def send_reset_otp_email(to_email: str, otp: str) -> None:
 def user_response(user: User, include_token: bool = False) -> UserResponse:
     token = create_access_token({
         "user_id": user.user_id,
-        "username": user.username,
+        "email": user.email,
         "role": user.role,
     }) if include_token else None
     return UserResponse(
         user_id=user.user_id,
         name=user.name,
-        username=user.username,
+        email=user.email,
         role=user.role,
         password="",
         created_at=user.created_at,
@@ -87,13 +86,13 @@ def user_response(user: User, include_token: bool = False) -> UserResponse:
     )
 
 
-def ensure_unique_username(db: Session, username: str):
-    if db.query(User).filter(User.username.ilike(username)).first():
+def ensure_unique_email(db: Session, email: str):
+    if db.query(User).filter(User.email.ilike(email)).first():
         raise HTTPException(status_code=400, detail="Email đã được sử dụng")
 
 
-def ensure_unique_username_for_update(db: Session, username: str, user_id: int):
-    existing = db.query(User).filter(User.username.ilike(username), User.user_id != user_id).first()
+def ensure_unique_email_for_update(db: Session, email: str, user_id: int):
+    existing = db.query(User).filter(User.email.ilike(email), User.user_id != user_id).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email đã được sử dụng")
 
@@ -107,14 +106,14 @@ def get_users(db: Session = Depends(get_db), user: dict = Depends(require_staff_
 @router.post("/", response_model=UserResponse)
 def create_user(user: UserCreate, db: Session = Depends(get_db), admin: dict = Depends(require_admin)):
     data = user.model_dump()
-    data["username"] = normalize_username(data["username"])
+    data["email"] = normalize_email(data["email"])
     data["name"] = (data.get("name") or "").strip() or None
     data["password"] = (
         hash_password(data["password"])
         if data.get("password") and not is_password_hash(data["password"])
         else data.get("password", "")
     )
-    ensure_unique_username(db, data["username"])
+    ensure_unique_email(db, data["email"])
     new_user = User(**data)
     db.add(new_user)
 
@@ -137,11 +136,11 @@ def update_user(user_id: int, user: UserCreate, db: Session = Depends(get_db), a
     if not existing_user:
         raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
 
-    username = normalize_username(user.username)
-    ensure_unique_username_for_update(db, username, user_id)
+    email = normalize_email(user.email)
+    ensure_unique_email_for_update(db, email, user_id)
 
     existing_user.name = (user.name or "").strip() or None
-    existing_user.username = username
+    existing_user.email = email
     if user.password:
         existing_user.password = hash_password(user.password) if not is_password_hash(user.password) else user.password
     existing_user.role = user.role
@@ -169,8 +168,8 @@ def delete_user(user_id: int, db: Session = Depends(get_db), admin: dict = Depen
 
 @router.post("/login", response_model=UserResponse)
 def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
-    username = normalize_username(credentials.username)
-    user = db.query(User).filter(User.username.ilike(username)).first()
+    email = normalize_email(credentials.email)
+    user = db.query(User).filter(User.email.ilike(email)).first()
     if not user or not verify_password(credentials.password, user.password):
         raise HTTPException(status_code=401, detail="Tài khoản hoặc mật khẩu sai")
 
@@ -179,8 +178,11 @@ def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
 
 @router.post("/reset-password/request")
 def request_password_reset(payload: PasswordResetRequest, db: Session = Depends(get_db)):
-    username = normalize_username(payload.username)
-    user = db.query(User).filter(User.username.ilike(username)).first()
+    email = normalize_email(payload.email)
+    user = db.query(User).filter(User.email.ilike(email)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Email chưa được đăng ký trong hệ thống")
+
     otp = generate_otp()
     expires_at = datetime.now() + timedelta(minutes=10)
     if user:
@@ -188,7 +190,7 @@ def request_password_reset(payload: PasswordResetRequest, db: Session = Depends(
         user.reset_otp_expires_at = expires_at
         db.commit()
         try:
-            send_reset_otp_email(user.username, otp)
+            send_reset_otp_email(user.email, otp)
         except RuntimeError as exc:
             user.reset_otp = None
             user.reset_otp_expires_at = None
@@ -200,8 +202,8 @@ def request_password_reset(payload: PasswordResetRequest, db: Session = Depends(
 
 @router.post("/reset-password/verify")
 def verify_password_reset(payload: PasswordResetVerify, db: Session = Depends(get_db)):
-    username = normalize_username(payload.username)
-    user = db.query(User).filter(User.username.ilike(username)).first()
+    email = normalize_email(payload.email)
+    user = db.query(User).filter(User.email.ilike(email)).first()
     if not user or not user.reset_otp or not user.reset_otp_expires_at:
         raise HTTPException(status_code=400, detail="Mã OTP không hợp lệ hoặc đã hết hạn.")
     if datetime.now() > user.reset_otp_expires_at:
@@ -217,8 +219,8 @@ def verify_password_reset(payload: PasswordResetVerify, db: Session = Depends(ge
 
 @router.post("/reset-password/confirm")
 def confirm_password_reset(payload: PasswordResetConfirm, db: Session = Depends(get_db)):
-    username = normalize_username(payload.username)
-    user = db.query(User).filter(User.username.ilike(username)).first()
+    email = normalize_email(payload.email)
+    user = db.query(User).filter(User.email.ilike(email)).first()
     if not user or not user.reset_otp or not user.reset_otp_expires_at:
         raise HTTPException(status_code=400, detail="Yêu cầu đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.")
     if datetime.now() > user.reset_otp_expires_at:

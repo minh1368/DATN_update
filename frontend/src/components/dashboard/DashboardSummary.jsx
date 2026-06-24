@@ -87,14 +87,14 @@ export default function DashboardSummary({
     },
     {
       label: "Chờ duyệt",
-      value: rangeRequests.filter((request) => ["pending", "deposit_pending"].includes(String(request.status || "").toLowerCase())).length,
+      value: rangeRequests.filter((request) => String(request.status || "").toLowerCase() === "pending").length,
       color: "#ffcc4d",
     },
     {
-      label: "Đã hủy",
+      label: "Đã từ chối",
       value: [
-        ...rangeContracts.filter((contract) => ["rejected", "cancelled"].includes(String(contract.status || "").toLowerCase())),
-        ...rangeRequests.filter((request) => ["rejected", "cancelled"].includes(String(request.status || "").toLowerCase())),
+        ...rangeContracts.filter((contract) => String(contract.status || "").toLowerCase() === "rejected"),
+        ...rangeRequests.filter((request) => String(request.status || "").toLowerCase() === "rejected"),
       ].length,
       color: "#ff6b6b",
     },
@@ -110,16 +110,16 @@ export default function DashboardSummary({
     {
       label: "Chờ thanh toán",
       value: filteredPaymentsInRange
-        .filter((payment) => ["pending", "unpaid", "refund_pending"].includes(String(payment.status || "").toLowerCase()))
+        .filter((payment) => String(payment.status || "").toLowerCase() === "unpaid")
         .reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
       color: "#ffcc4d",
     },
     {
-      label: "Đã hoàn tiền",
+      label: "Đã từ chối",
       value: filteredPaymentsInRange
-        .filter((payment) => String(payment.status || "").toLowerCase() === "refunded")
+        .filter((payment) => String(payment.status || "").toLowerCase() === "rejected")
         .reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
-      color: "#31b7ff",
+      color: "#ff6b6b",
     },
   ];
   const brandRevenueMap = filteredPaidPayments.reduce((brandMap, payment) => {

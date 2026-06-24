@@ -5,7 +5,7 @@ from app.models.payment import Payment
 from app.models.rental_request import RentalRequest
 
 
-ACTIVE_REQUEST_STATUSES = ("pending", "deposit_pending", "approved")
+ACTIVE_REQUEST_STATUSES = ("deposit_pending", "pending", "approved")
 ACTIVE_CONTRACT_STATUSES = ("pending", "approved")
 
 
@@ -23,7 +23,7 @@ def has_overlapping_booking(
     )
     inactive_payment_request_ids = db.query(Payment.request_id).filter(
         Payment.request_id.isnot(None),
-        Payment.status.in_(["rejected", "cancelled", "refunded"]),
+        Payment.status == "rejected",
     )
 
     request_query = db.query(RentalRequest).filter(
@@ -41,6 +41,42 @@ def has_overlapping_booking(
 
     contract_query = db.query(Contract).filter(
         Contract.car_id == car_id,
+        Contract.status.in_(ACTIVE_CONTRACT_STATUSES),
+        Contract.start_date <= end_date,
+        Contract.end_date >= start_date,
+    )
+    if exclude_contract_id is not None:
+        contract_query = contract_query.filter(Contract.contract_id != exclude_contract_id)
+    return contract_query.first() is not None
+
+
+def has_overlapping_customer_booking(
+    db: Session,
+    customer_id: int,
+    start_date,
+    end_date,
+    exclude_request_id: int | None = None,
+    exclude_contract_id: int | None = None,
+) -> bool:
+    inactive_payment_request_ids = db.query(Payment.request_id).filter(
+        Payment.request_id.isnot(None),
+        Payment.status == "rejected",
+    )
+
+    request_query = db.query(RentalRequest).filter(
+        RentalRequest.customer_id == customer_id,
+        RentalRequest.status.in_(ACTIVE_REQUEST_STATUSES),
+        RentalRequest.start_date <= end_date,
+        RentalRequest.end_date >= start_date,
+        ~RentalRequest.request_id.in_(inactive_payment_request_ids),
+    )
+    if exclude_request_id is not None:
+        request_query = request_query.filter(RentalRequest.request_id != exclude_request_id)
+    if request_query.first():
+        return True
+
+    contract_query = db.query(Contract).filter(
+        Contract.customer_id == customer_id,
         Contract.status.in_(ACTIVE_CONTRACT_STATUSES),
         Contract.start_date <= end_date,
         Contract.end_date >= start_date,

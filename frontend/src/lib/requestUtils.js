@@ -1,9 +1,8 @@
 export const formatRequestStatus = (status) => {
   const normalized = String(status || "").trim().toLowerCase();
-  if (["deposit_pending", "pending"].includes(normalized)) return "Chờ duyệt";
+  if (normalized === "pending") return "Chờ duyệt";
   if (normalized === "approved") return "Đã duyệt";
   if (normalized === "rejected") return "Đã từ chối";
-  if (normalized === "completed") return "Hoàn thành";
   return status || "-";
 };
 
@@ -18,11 +17,9 @@ export const formatContractStatusLabel = (status) => {
 
 export const formatDepositStatus = (status) => {
   const normalized = String(status || "").trim().toLowerCase();
-  if (["pending", "unpaid"].includes(normalized)) return "Chờ duyệt";
+  if (normalized === "unpaid") return "Chờ duyệt";
   if (normalized === "paid") return "Đã duyệt";
-  if (normalized === "refund_pending") return "Chờ hoàn cọc";
-  if (normalized === "refunded") return "Đã hoàn cọc";
-  if (normalized === "cancelled") return "Đã hủy cọc";
+  if (normalized === "rejected") return "Đã từ chối";
   return status || "-";
 };
 

@@ -10,7 +10,7 @@ from app.models.contract import Contract
 from app.models.user import User
 from app.schemas.customer import CustomerCreate, CustomerResponse
 from app.schemas.user import UserLogin, PasswordResetRequest, PasswordResetVerify, PasswordResetConfirm
-from app.security import hash_password, is_password_hash, verify_password, create_access_token
+from app.security import hash_password, verify_password, create_access_token
 from app.routers.user import generate_otp, send_reset_otp_email
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
@@ -20,6 +20,13 @@ def normalize_email(email: str | None) -> str | None:
     if email is None:
         return None
     value = email.strip().lower()
+    return value or None
+
+
+def normalize_phone(phone: str | None) -> str | None:
+    if phone is None:
+        return None
+    value = "".join(ch for ch in phone.strip() if ch not in " .-")
     return value or None
 
 
@@ -34,13 +41,35 @@ def ensure_unique_customer_email(db: Session, email: str | None, customer_id: in
     if query.first():
         raise HTTPException(status_code=400, detail="Email đã được sử dụng")
 
+    if db.query(User).filter(User.email.ilike(normalized_email)).first():
+        raise HTTPException(status_code=400, detail="Email đã được sử dụng")
+
+
+def ensure_unique_customer_phone(db: Session, phone: str | None, customer_id: int | None = None):
+    normalized_phone = normalize_phone(phone)
+    if not normalized_phone:
+        return
+
+    query = db.query(Customer).filter(Customer.phone == normalized_phone)
+    if customer_id is not None:
+        query = query.filter(Customer.customer_id != customer_id)
+    if query.first():
+        raise HTTPException(status_code=400, detail="Số điện thoại đã được sử dụng")
+
+
+def prepare_customer_data(customer: CustomerCreate) -> dict:
+    data = customer.model_dump()
+    data["email"] = normalize_email(data.get("email"))
+    data["phone"] = normalize_phone(data.get("phone"))
+    return data
+
 
 @router.get("/", response_model=List[CustomerResponse])
 def get_customers(db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
     staff_emails = [
-        account.username.lower()
+        account.email.lower()
         for account in db.query(User).filter(User.role.in_(["admin", "staff"])).all()
-        if account.username and "@" in account.username
+        if account.email and "@" in account.email
     ]
     customers = db.query(Customer).all()
     return [
@@ -68,13 +97,13 @@ def get_customer(customer_id: int, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=CustomerResponse)
 def create_customer(customer: CustomerCreate, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
-    data = customer.model_dump()
-    data["email"] = normalize_email(data.get("email"))
+    data = prepare_customer_data(customer)
     
     raw_password = data.get("password") or ""
     data["password"] = hash_password(raw_password) if raw_password else ""
     
     ensure_unique_customer_email(db, data.get("email"))
+    ensure_unique_customer_phone(db, data.get("phone"))
     new_customer = Customer(**data)
     db.add(new_customer)
 
@@ -93,13 +122,13 @@ def create_customer(customer: CustomerCreate, db: Session = Depends(get_db), use
 
 @router.post("/public", response_model=CustomerResponse)
 def create_customer_public(customer: CustomerCreate, db: Session = Depends(get_db)):
-    data = customer.model_dump()
-    data["email"] = normalize_email(data.get("email"))
+    data = prepare_customer_data(customer)
     
     raw_password = data.get("password") or ""
     data["password"] = hash_password(raw_password) if raw_password else ""
     
     ensure_unique_customer_email(db, data.get("email"))
+    ensure_unique_customer_phone(db, data.get("phone"))
     new_customer = Customer(**data)
     db.add(new_customer)
 
@@ -122,8 +151,7 @@ def update_customer_profile(customer_id: int, customer_data: CustomerCreate, db:
     if not customer:
         raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
 
-    data = customer_data.model_dump()
-    data["email"] = normalize_email(data.get("email"))
+    data = prepare_customer_data(customer_data)
     
     if data.get("password") is None or data.get("password") == "":
         data.pop("password", None)
@@ -131,6 +159,7 @@ def update_customer_profile(customer_id: int, customer_data: CustomerCreate, db:
         data["password"] = hash_password(data["password"])
         
     ensure_unique_customer_email(db, data.get("email"), customer_id)
+    ensure_unique_customer_phone(db, data.get("phone"), customer_id)
 
     for field, value in data.items():
         setattr(customer, field, value)
@@ -154,8 +183,7 @@ def update_customer(customer_id: int, customer_data: CustomerCreate, db: Session
     if not customer:
         raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
 
-    data = customer_data.model_dump()
-    data["email"] = normalize_email(data.get("email"))
+    data = prepare_customer_data(customer_data)
     
     if data.get("password") is None or data.get("password") == "":
         data.pop("password", None)
@@ -163,6 +191,7 @@ def update_customer(customer_id: int, customer_data: CustomerCreate, db: Session
         data["password"] = hash_password(data["password"])
         
     ensure_unique_customer_email(db, data.get("email"), customer_id)
+    ensure_unique_customer_phone(db, data.get("phone"), customer_id)
 
     for field, value in data.items():
         setattr(customer, field, value)
@@ -200,7 +229,7 @@ def delete_customer(customer_id: int, db: Session = Depends(get_db), user: dict 
 
 @router.post("/login", response_model=CustomerResponse)
 def login_customer(credentials: UserLogin, db: Session = Depends(get_db)):
-    email = normalize_email(credentials.username)
+    email = normalize_email(credentials.email)
     if not email:
         raise HTTPException(status_code=400, detail="Email không hợp lệ")
         
@@ -210,7 +239,7 @@ def login_customer(credentials: UserLogin, db: Session = Depends(get_db)):
 
     token = create_access_token({
         "user_id": customer.customer_id,
-        "username": customer.email,
+        "email": customer.email,
         "role": "customer",
     })
     
@@ -220,8 +249,11 @@ def login_customer(credentials: UserLogin, db: Session = Depends(get_db)):
 
 @router.post("/reset-password/request")
 def request_customer_password_reset(payload: PasswordResetRequest, db: Session = Depends(get_db)):
-    email = normalize_email(payload.username)
+    email = normalize_email(payload.email)
     customer = db.query(Customer).filter(Customer.email.ilike(email)).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Email chưa được đăng ký trong hệ thống")
+
     otp = generate_otp()
     expires_at = datetime.now() + timedelta(minutes=10)
     
@@ -242,7 +274,7 @@ def request_customer_password_reset(payload: PasswordResetRequest, db: Session =
 
 @router.post("/reset-password/verify")
 def verify_customer_password_reset(payload: PasswordResetVerify, db: Session = Depends(get_db)):
-    email = normalize_email(payload.username)
+    email = normalize_email(payload.email)
     customer = db.query(Customer).filter(Customer.email.ilike(email)).first()
     
     if not customer or not customer.reset_otp or not customer.reset_otp_expires_at:
@@ -262,7 +294,7 @@ def verify_customer_password_reset(payload: PasswordResetVerify, db: Session = D
 
 @router.post("/reset-password/confirm")
 def confirm_customer_password_reset(payload: PasswordResetConfirm, db: Session = Depends(get_db)):
-    email = normalize_email(payload.username)
+    email = normalize_email(payload.email)
     customer = db.query(Customer).filter(Customer.email.ilike(email)).first()
     
     if not customer or not customer.reset_otp or not customer.reset_otp_expires_at:

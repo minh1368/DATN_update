@@ -1,36 +1,42 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from datetime import datetime
 
 class UserCreate(BaseModel):
     name: str | None = None
-    username: str
+    email: str = Field(validation_alias=AliasChoices("email", "username"))
     password: str = ""
     role: str
 
-class UserRegister(BaseModel):
-    username: str
-    password: str
+    model_config = ConfigDict(populate_by_name=True)
 
 class UserLogin(BaseModel):
-    username: str
+    email: str = Field(validation_alias=AliasChoices("email", "username"))
     password: str
 
+    model_config = ConfigDict(populate_by_name=True)
+
 class PasswordResetRequest(BaseModel):
-    username: str
+    email: str = Field(validation_alias=AliasChoices("email", "username"))
+
+    model_config = ConfigDict(populate_by_name=True)
 
 class PasswordResetVerify(BaseModel):
-    username: str
+    email: str = Field(validation_alias=AliasChoices("email", "username"))
     otp: str
 
+    model_config = ConfigDict(populate_by_name=True)
+
 class PasswordResetConfirm(BaseModel):
-    username: str
+    email: str = Field(validation_alias=AliasChoices("email", "username"))
     otp: str
     new_password: str
+
+    model_config = ConfigDict(populate_by_name=True)
 
 class UserResponse(BaseModel):
     user_id: int
     name: str | None = None
-    username: str
+    email: str
     password: str
     role: str
     created_at: datetime | None = None

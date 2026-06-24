@@ -52,25 +52,14 @@ export default function useAuth({ notify, onLogout, adminMode = false }) {
     return { title: "Đặt lại mật khẩu", subtitle: "Nhập mật khẩu mới để hoàn tất." };
   })();
 
-  const fetchCustomerByEmail = async (email) => {
-    if (!email || !email.includes("@")) return null;
-    return customerService.findByEmail(email).catch(() => null);
-  };
-
   const createCustomerProfile = async () => {
-    try {
-      return await customerService.createPublic({
-        name: registerData.fullName,
-        phone: registerData.phone,
-        email: registerData.email,
-        password: registerData.password,
-        address: registerData.address || "",
-      });
-    } catch (error) {
-      const existingCustomer = await fetchCustomerByEmail(registerData.email);
-      if (existingCustomer) return existingCustomer;
-      throw error;
-    }
+    return customerService.createPublic({
+      name: registerData.fullName,
+      phone: registerData.phone,
+      email: registerData.email,
+      password: registerData.password,
+      address: registerData.address || "",
+    });
   };
 
   const handleLoginClick = () => {
@@ -104,14 +93,21 @@ export default function useAuth({ notify, onLogout, adminMode = false }) {
 
     try {
       if (adminMode) {
-        await userService.requestPasswordReset({ username: forgotEmail });
+        await userService.requestPasswordReset({ email: forgotEmail });
       } else {
-        await Promise.allSettled([
-          customerService.requestPasswordReset({ username: forgotEmail }),
-          userService.requestPasswordReset({ username: forgotEmail })
+        const resetResults = await Promise.allSettled([
+          customerService.requestPasswordReset({ email: forgotEmail }),
+          userService.requestPasswordReset({ email: forgotEmail })
         ]);
+        const failedSend = resetResults.find((result) => (
+          result.status === "rejected" && Number(result.reason?.status || 0) >= 500
+        ));
+        if (failedSend) throw failedSend.reason;
+        if (resetResults.every((result) => result.status === "rejected")) {
+          throw resetResults[0].reason;
+        }
       }
-      setPasswordResetStatus("Mã OTP đã được gửi nếu email tồn tại trong hệ thống.");
+      setPasswordResetStatus("Mã OTP đã được gửi. Vui lòng kiểm tra email.");
       setAuthMode("verify");
     } catch (error) {
       notify(getReadableErrorMessage(error, "Yêu cầu quên mật khẩu thất bại"), "error");
@@ -127,13 +123,13 @@ export default function useAuth({ notify, onLogout, adminMode = false }) {
 
     try {
       if (adminMode) {
-        await userService.verifyPasswordResetOtp({ username: forgotEmail, otp: resetOtp });
+        await userService.verifyPasswordResetOtp({ email: forgotEmail, otp: resetOtp });
       } else {
         try {
-          await customerService.verifyPasswordResetOtp({ username: forgotEmail, otp: resetOtp });
+          await customerService.verifyPasswordResetOtp({ email: forgotEmail, otp: resetOtp });
         } catch (error) {
-          if (error?.status === 404 || error?.status === 400 || error?.status === 401) {
-            await userService.verifyPasswordResetOtp({ username: forgotEmail, otp: resetOtp });
+          if (error?.status === 404) {
+            await userService.verifyPasswordResetOtp({ email: forgotEmail, otp: resetOtp });
           } else {
             throw error;
           }
@@ -160,7 +156,7 @@ export default function useAuth({ notify, onLogout, adminMode = false }) {
 
     try {
       const payload = {
-        username: forgotEmail,
+        email: forgotEmail,
         otp: resetOtp,
         new_password: resetPassword,
       };
@@ -170,7 +166,7 @@ export default function useAuth({ notify, onLogout, adminMode = false }) {
         try {
           await customerService.confirmPasswordReset(payload);
         } catch (error) {
-          if (error?.status === 404 || error?.status === 400 || error?.status === 401) {
+          if (error?.status === 404) {
             await userService.confirmPasswordReset(payload);
           } else {
             throw error;
@@ -227,7 +223,7 @@ export default function useAuth({ notify, onLogout, adminMode = false }) {
           const res = await customerService.login(loginData);
           user = {
             user_id: res.customer_id,
-            username: res.email,
+            email: res.email,
             name: res.name,
             role: "customer",
             token: res.token,
@@ -246,11 +242,11 @@ export default function useAuth({ notify, onLogout, adminMode = false }) {
 
       const userProfile = customer
         ? { ...user, ...customer }
-        : { ...user, email: user.username?.includes("@") ? user.username : "" };
+        : { ...user, email: user.email || (user.username?.includes("@") ? user.username : "") };
 
-      setLoggedInUser(userProfile.name || user.username);
+      setLoggedInUser(userProfile.name || user.email || user.username);
       setRole(loginRole);
-      authStorage.setItem("loggedInUser", userProfile.name || user.username);
+      authStorage.setItem("loggedInUser", userProfile.name || user.email || user.username);
       authStorage.setItem("userRole", loginRole);
       authStorage.setItem("userData", JSON.stringify(userProfile));
       if (user.token) authStorage.setItem("authToken", user.token);

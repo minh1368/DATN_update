@@ -70,7 +70,7 @@ export default function PaymentManagement({
 
   const paymentGroups = [...paymentGroupsMap.values()].map((group) => {
     const sortedGroupPayments = [...group.payments].sort((a, b) => {
-      const typeOrder = { deposit: 1, remaining: 2, rental: 2, refund: 3 };
+      const typeOrder = { deposit: 1, remaining: 2 };
       const left = typeOrder[String(a.payment_type || "").toLowerCase()] || 9;
       const right = typeOrder[String(b.payment_type || "").toLowerCase()] || 9;
       if (left !== right) return left - right;
@@ -83,7 +83,7 @@ export default function PaymentManagement({
       if (
         paymentType === "deposit" &&
         ["approved", "completed"].includes(requestStatus) &&
-        ["pending", "unpaid"].includes(paymentStatus)
+          paymentStatus === "unpaid"
       ) {
         return { ...payment, status: "paid", paid_at: payment.paid_at || new Date().toISOString() };
       }
@@ -96,15 +96,15 @@ export default function PaymentManagement({
     const hasPaidPayment = group.payments.some((payment) => String(payment.status || "").toLowerCase() === "paid");
     const hasOnlyPendingDeposit = group.payments.every((payment) => (
       String(payment.payment_type || "").toLowerCase() === "deposit" &&
-      ["pending", "unpaid"].includes(String(payment.status || "").toLowerCase())
+      String(payment.status || "").toLowerCase() === "unpaid"
     ));
-    return !(["deposit_pending", "pending"].includes(requestStatus) && hasOnlyPendingDeposit && !hasPaidPayment);
+    return !(requestStatus === "pending" && hasOnlyPendingDeposit && !hasPaidPayment);
   });
 
   const paymentBrandOptions = uniqueCanonicalBrands(
     paymentGroups.map((group) => group.car).filter(Boolean)
   );
-  const paymentStatusOptions = ["pending", "paid", "rejected"];
+  const paymentStatusOptions = ["unpaid", "paid", "rejected"];
   const normalizedPaymentSearch = paymentSearch.trim().toLowerCase();
   const filteredPaymentGroups = paymentGroups.filter((group) => {
     const dateSource = group.contract || group.request || group.payments.find((payment) => payment.paid_at);
@@ -115,9 +115,7 @@ export default function PaymentManagement({
     if (!isItemInDateRange(dateRangeItem, paymentStartFilter, paymentEndFilter)) return false;
     if (paymentBrandFilter && canonicalizeBrand(group.car?.brand) !== paymentBrandFilter) return false;
     if (paymentStatusFilter) {
-      if (paymentStatusFilter === "pending") {
-        if (!["pending", "unpaid"].includes(group.summary.status)) return false;
-      } else if (group.summary.status !== paymentStatusFilter) return false;
+      if (group.summary.status !== paymentStatusFilter) return false;
     }
     if (!normalizedPaymentSearch) return true;
     const paymentCodes = group.payments.map((payment) => formatPaymentCode(payment.payment_id));
@@ -302,7 +300,6 @@ export default function PaymentManagement({
                                   setNotReceivedPayment={setNotReceivedPayment}
                                   onConfirm={(paymentId) => handlePaymentAction(paymentId, "confirm")}
                                   onRejectNotify={handlePaymentRejectNotify}
-                                  onRefund={(paymentId) => handlePaymentAction(paymentId, "refund")}
                                 />
                               </div>
                             </div>

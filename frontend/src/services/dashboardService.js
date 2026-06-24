@@ -55,7 +55,6 @@ export const paymentService = {
   getAll: (headers) => apiJson("/payments", { headers }),
   confirm: (paymentId, headers) => apiJson(`/payments/${paymentId}/pay`, { method: "PUT", headers }),
   reject: (paymentId, headers, body) => apiJson(`/payments/${paymentId}/reject`, { method: "PUT", headers, body }),
-  refund: (paymentId, headers) => apiJson(`/payments/${paymentId}/refund`, { method: "PUT", headers }),
   remove: (paymentId, headers) => apiJson(`/payments/${paymentId}`, { method: "DELETE", headers }),
 };
 
@@ -67,7 +66,6 @@ export const reviewService = {
 export const userService = {
   getAll: (headers) => apiJson("/users", { headers }),
   login: (data) => apiJson("/users/login", { method: "POST", body: data }),
-  register: (data) => apiJson("/users/register", { method: "POST", body: data }),
   requestPasswordReset: (data) => apiJson("/users/reset-password/request", { method: "POST", body: data }),
   verifyPasswordResetOtp: (data) => apiJson("/users/reset-password/verify", { method: "POST", body: data }),
   confirmPasswordReset: (data) => apiJson("/users/reset-password/confirm", { method: "POST", body: data }),

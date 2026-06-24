@@ -35,7 +35,7 @@ def get_current_user(authorization: str | None = Header(None, alias="Authorizati
     return {
         "role": role,
         "user_id": payload.get("user_id"),
-        "username": payload.get("username"),
+        "email": payload.get("email") or payload.get("username"),
     }
 
 

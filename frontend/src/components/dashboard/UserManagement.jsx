@@ -39,7 +39,7 @@ export default function UserManagement({
   const filteredUsers = users.filter((user) => {
     if (userRoleFilter && user.role !== userRoleFilter) return false;
     if (!normalizedUserSearch) return true;
-    return [user.name, user.username, user.role, formatUserCreatedDate(user.created_at)]
+    return [user.name, user.email || user.username, user.role, formatUserCreatedDate(user.created_at)]
       .join(" ")
       .toLowerCase()
       .includes(normalizedUserSearch);
@@ -113,7 +113,7 @@ export default function UserManagement({
                 </label>
                 <label>
                   Email *
-                  <input type="email" value={newUser.username} onChange={(event) => setNewUser({ ...newUser, username: event.target.value })} required />
+                  <input type="email" value={newUser.email} onChange={(event) => setNewUser({ ...newUser, email: event.target.value })} required />
                 </label>
                 <label>
                   Password *
@@ -152,7 +152,7 @@ export default function UserManagement({
                 </label>
                 <label>
                   Email
-                  <input type="email" value={editingUser.username} onChange={(event) => setEditingUser({ ...editingUser, username: event.target.value })} required />
+                  <input type="email" value={editingUser.email} onChange={(event) => setEditingUser({ ...editingUser, email: event.target.value })} required />
                 </label>
                 <label>
                   Password
@@ -200,7 +200,7 @@ export default function UserManagement({
               <tr key={user.user_id}>
                 <td>{(safePage - 1) * 10 + index + 1}</td>
                 <td>{user.name || "-"}</td>
-                <td>{user.username}</td>
+                <td>{user.email || user.username}</td>
                 <td>{user.role}</td>
                 <td>{formatUserCreatedDate(user.created_at)}</td>
                 <td>

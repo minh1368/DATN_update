@@ -72,10 +72,8 @@ export default function useRequests({
         Number(payment.request_id) === Number(requestId) && String(payment.payment_type || "").toLowerCase() === "deposit"
           ? {
               ...payment,
-              status: String(payment.status || "").toLowerCase() === "paid" ? "refund_pending" : "cancelled",
-              note: String(payment.status || "").toLowerCase() === "paid"
-                ? `Lý do từ chối: ${reason}. Cần hoàn tiền cọc`
-                : `Lý do từ chối: ${reason}`,
+              status: "rejected",
+              note: `Lý do từ chối: ${reason}`,
             }
           : payment
       )));

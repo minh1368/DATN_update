@@ -6,6 +6,7 @@ from app.models.support_chat import SupportConversation, SupportMessage
 from app.schemas.support_chat import ConversationCreate, MessageCreate
 
 router = APIRouter(prefix="/support", tags=["Support Chat"])
+ANONYMOUS_CUSTOMER_NAME = "Khách hàng ẩn danh"
 
 
 def _conversation_to_dict(conversation: SupportConversation, latest: SupportMessage | None = None):
@@ -96,6 +97,8 @@ def _get_conversation(db: Session, conversation_id: int) -> SupportConversation:
 @router.post("/conversations")
 def create_or_get_conversation(payload: ConversationCreate, db: Session = Depends(get_db)):
     email = payload.customer_email.strip().lower() if payload.customer_email else None
+    submitted_name = payload.customer_name.strip() if payload.customer_name else ""
+    customer_name = submitted_name if payload.customer_id else ANONYMOUS_CUSTOMER_NAME
     query = db.query(SupportConversation).filter(SupportConversation.status == "open")
     conversation = None
 
@@ -107,15 +110,15 @@ def create_or_get_conversation(payload: ConversationCreate, db: Session = Depend
     if not conversation:
         conversation = SupportConversation(
             customer_id=payload.customer_id,
-            customer_name=payload.customer_name.strip() or "Khách hàng",
+            customer_name=customer_name,
             customer_email=email,
             status="open",
         )
         db.add(conversation)
         db.commit()
         db.refresh(conversation)
-    elif payload.customer_name and payload.customer_name.strip() and conversation.customer_name == "Khách hàng":
-        conversation.customer_name = payload.customer_name.strip()
+    elif payload.customer_id and submitted_name and conversation.customer_name == ANONYMOUS_CUSTOMER_NAME:
+        conversation.customer_name = submitted_name
         db.commit()
         db.refresh(conversation)
 

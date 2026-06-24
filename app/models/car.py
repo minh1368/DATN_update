@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Numeric
+from sqlalchemy import Column, Integer, String, Numeric
 from app.database import Base
 
 class Car(Base):
@@ -7,7 +7,7 @@ class Car(Base):
     car_id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
     brand = Column(String)
-    license_plate = Column(String)
+    license_plate = Column(String, unique=True)
     price_per_day = Column(Numeric)
     status = Column(String)
     

@@ -1,24 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import datetime
-from pydantic import BaseModel
 
 from app.dependencies import get_db, require_staff_or_admin
 from app.models.contract import Contract
 from app.models.payment import Payment
 from app.models.rental_request import RentalRequest
-from app.models.rental_request import RentalRequest
 from app.models.car import Car
-from app.rental_availability import has_overlapping_booking
+from app.rental_availability import has_overlapping_booking, has_overlapping_customer_booking
 from app.schemas.contract import ContractResponse
 
 router = APIRouter(prefix="/contracts", tags=["Contracts"])
 VAT_RATE = 0.08
-
-
-class ContractSignPayload(BaseModel):
-    signer: str = "staff"
 
 # GET contracts
 @router.get("/", response_model=List[ContractResponse])
@@ -55,10 +48,13 @@ def create_contract(request_id: int, db: Session = Depends(get_db), user: dict =
         raise HTTPException(status_code=404, detail="Xe không tồn tại")
 
     if car.status != "available":
-        raise HTTPException(status_code=400, detail="Xe đã được thuê")
+        raise HTTPException(status_code=400, detail="Xe hiện không khả dụng")
 
     if has_overlapping_booking(db, req.car_id, req.start_date, req.end_date, exclude_request_id=req.request_id):
         raise HTTPException(status_code=400, detail="Xe đã có lịch thuê trong khoảng thời gian này")
+
+    if has_overlapping_customer_booking(db, req.customer_id, req.start_date, req.end_date, exclude_request_id=req.request_id):
+        raise HTTPException(status_code=400, detail="Khách hàng đã có lịch thuê xe trong khoảng thời gian này")
 
     days = (req.end_date - req.start_date).days + 1
     if days <= 0:
@@ -76,7 +72,7 @@ def create_contract(request_id: int, db: Session = Depends(get_db), user: dict =
 
     remaining_payment = db.query(Payment).filter(
         Payment.request_id == req.request_id,
-        Payment.payment_type.in_(["remaining", "rental"]),
+        Payment.payment_type == "remaining",
     ).first()
     remaining_due = max(total_price - float(deposit_payment.amount or 0), 0)
     if remaining_due > 0 and (not remaining_payment or remaining_payment.status != "paid"):
@@ -129,6 +125,16 @@ def approve_contract(contract_id: int, db: Session = Depends(get_db), user: dict
     ):
         raise HTTPException(status_code=400, detail="Xe đã có lịch thuê trong khoảng thời gian này")
 
+    if has_overlapping_customer_booking(
+        db,
+        contract.customer_id,
+        contract.start_date,
+        contract.end_date,
+        exclude_request_id=contract.request_id,
+        exclude_contract_id=contract.contract_id,
+    ):
+        raise HTTPException(status_code=400, detail="Khách hàng đã có lịch thuê xe trong khoảng thời gian này")
+
     contract.status = "approved"
     car.status = "rented"
 
@@ -143,7 +149,7 @@ def approve_contract(contract_id: int, db: Session = Depends(get_db), user: dict
     remaining_amount = max(float(contract.total_price or 0) - paid_deposit_amount, 0)
     existing_payment = db.query(Payment).filter(
         Payment.request_id == contract.request_id,
-        Payment.payment_type.in_(["remaining", "rental"]),
+        Payment.payment_type == "remaining",
     ).first()
     if remaining_amount > 0 and (not existing_payment or existing_payment.status != "paid"):
         raise HTTPException(status_code=400, detail="Chưa thanh toán đủ tiền thuê")
@@ -153,7 +159,7 @@ def approve_contract(contract_id: int, db: Session = Depends(get_db), user: dict
         existing_payment.amount = remaining_amount
         existing_payment.total_amount = contract.total_price
         existing_payment.remaining_amount = remaining_amount
-        existing_payment.payment_type = existing_payment.payment_type or "remaining"
+        existing_payment.payment_type = "remaining"
         if remaining_amount == 0:
             existing_payment.status = "paid"
 
@@ -162,63 +168,6 @@ def approve_contract(contract_id: int, db: Session = Depends(get_db), user: dict
 
     return contract
 
-
-@router.put("/{contract_id}/issue-invoice", response_model=ContractResponse)
-def issue_invoice(contract_id: int, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
-    contract = db.query(Contract).filter(Contract.contract_id == contract_id).first()
-    if not contract:
-        raise HTTPException(status_code=404, detail="Hợp đồng không tồn tại")
-
-    if contract.status not in ["approved", "completed"]:
-        raise HTTPException(status_code=400, detail="Chỉ phát hành hóa đơn cho hợp đồng đã duyệt hoặc đã hoàn thành")
-
-    now = datetime.utcnow()
-    if not contract.invoice_code:
-        contract.invoice_code = f"HDDT-{contract.contract_id:04d}-{now.strftime('%Y%m%d%H%M%S')}"
-    contract.invoice_status = "issued"
-    contract.invoice_issued_at = now
-
-    db.commit()
-    db.refresh(contract)
-    return contract
-
-
-@router.put("/{contract_id}/sign", response_model=ContractResponse)
-def sign_contract(
-    contract_id: int,
-    payload: ContractSignPayload,
-    db: Session = Depends(get_db),
-    user: dict = Depends(require_staff_or_admin),
-):
-    contract = db.query(Contract).filter(Contract.contract_id == contract_id).first()
-    if not contract:
-        raise HTTPException(status_code=404, detail="Hợp đồng không tồn tại")
-
-    signer = (payload.signer or "staff").strip().lower()
-    now = datetime.utcnow()
-
-    if signer in ["staff", "admin", "company", "nhan_su", "nhân sự"]:
-        contract.staff_signed_at = contract.staff_signed_at or now
-    elif signer in ["customer", "khach_hang", "khách hàng"]:
-        contract.customer_signed_at = contract.customer_signed_at or now
-    elif signer == "both":
-        contract.staff_signed_at = contract.staff_signed_at or now
-        contract.customer_signed_at = contract.customer_signed_at or now
-    else:
-        raise HTTPException(status_code=400, detail="Người ký không hợp lệ")
-
-    if contract.staff_signed_at and contract.customer_signed_at:
-        contract.signature_status = "completed"
-    elif contract.staff_signed_at:
-        contract.signature_status = "company_signed"
-    elif contract.customer_signed_at:
-        contract.signature_status = "customer_signed"
-    else:
-        contract.signature_status = "unsigned"
-
-    db.commit()
-    db.refresh(contract)
-    return contract
 
 # Trả xe
 @router.put("/{contract_id}/return")
@@ -232,7 +181,7 @@ def return_car(contract_id: int, db: Session = Depends(get_db), user: dict = Dep
         raise HTTPException(400, "Chỉ trả xe khi contract đã được duyệt")
 
     payments = db.query(Payment).filter(Payment.contract_id == contract.contract_id).all()
-    rejected_statuses = {"rejected", "cancelled", "refund_pending", "refunded"}
+    rejected_statuses = {"rejected"}
     if any(StringStatus(payment.status) in rejected_statuses for payment in payments):
         raise HTTPException(400, "Thanh toán đã bị từ chối, không thể trả xe")
 
@@ -250,10 +199,6 @@ def return_car(contract_id: int, db: Session = Depends(get_db), user: dict = Dep
 
     car.status = "available"
     contract.status = "completed"
-    if contract.request_id:
-        rental_request = db.query(RentalRequest).filter(RentalRequest.request_id == contract.request_id).first()
-        if rental_request:
-            rental_request.status = "completed"
 
     db.commit()
 

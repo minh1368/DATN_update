@@ -29,7 +29,7 @@ export default function useDashboardWorkspaceData({
     const dashboardUsers = users.filter((user) => user.role !== "customer");
     const staffEmails = new Set(
       dashboardUsers
-        .map((user) => String(user.username || "").toLowerCase())
+        .map((user) => String(user.email || user.username || "").toLowerCase())
         .filter((email) => email.includes("@"))
     );
     const dashboardCustomers = customers.filter(

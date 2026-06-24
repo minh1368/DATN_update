@@ -31,7 +31,7 @@ export default function FloatingChatWidget() {
     return {
       role,
       customerId: userData.customer_id || authStorage.getItem("customerId") || null,
-      name: userData.name || authStorage.getItem("loggedInUser") || "Khách hàng",
+      name: userData.name || authStorage.getItem("loggedInUser") || "Khách hàng ẩn danh",
       email: userData.email || userData.username || "",
     };
   };

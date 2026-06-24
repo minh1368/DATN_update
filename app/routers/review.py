@@ -31,16 +31,16 @@ def create_review(review_data: ReviewCreate, db: Session = Depends(get_db)):
     if rating < 1 or rating > 5:
         raise HTTPException(status_code=400, detail="Số sao đánh giá phải từ 1 đến 5")
 
-    customer_id = review_data.customer_id
-    customer = None
-    if customer_id:
-        customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
-        if customer:
-            name = customer.name or name
-            email = customer.email or email
+    customer = db.query(Customer).filter(Customer.customer_id == review_data.customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=400, detail="Khách hàng không tồn tại hoặc chưa đăng nhập")
+    name = customer.name or name
+    email = customer.email or email
+    if not email:
+        raise HTTPException(status_code=400, detail="Email người đánh giá không được để trống")
 
     review = Review(
-        customer_id=customer.customer_id if customer else customer_id,
+        customer_id=customer.customer_id,
         name=name,
         email=email,
         rating=rating,

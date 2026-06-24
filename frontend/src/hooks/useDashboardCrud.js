@@ -20,7 +20,7 @@ const EMPTY_CAR = {
 };
 
 const EMPTY_CUSTOMER = { name: "", phone: "", email: "", password: "", address: "" };
-const EMPTY_USER = { name: "", username: "", password: "", role: "staff" };
+const EMPTY_USER = { name: "", email: "", password: "", role: "staff" };
 
 export default function useDashboardCrud({ headers, refreshData, refreshCarsContext, notify }) {
   const [newCar, setNewCar] = useState(EMPTY_CAR);
@@ -152,7 +152,7 @@ export default function useDashboardCrud({ headers, refreshData, refreshCarsCont
     setEditingUser({
       user_id: user.user_id,
       name: user.name || "",
-      username: user.username || "",
+      email: user.email || user.username || "",
       password: user.password || "",
       role: user.role || "staff",
     });
@@ -163,7 +163,7 @@ export default function useDashboardCrud({ headers, refreshData, refreshCarsCont
     if (!editingUser) return;
     const ok = await runMutation(() => userService.update(editingUser.user_id, {
       name: editingUser.name,
-      username: editingUser.username,
+      email: editingUser.email,
       password: editingUser.password,
       role: editingUser.role,
     }, headers), "Lưu nhân sự thất bại");

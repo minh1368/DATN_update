@@ -12,7 +12,7 @@ function formatShortDate(value) {
 
 function getPaymentMarker(status) {
   const normalized = String(status || "").toLowerCase();
-  return ["paid", "refunded"].includes(normalized) ? "✓" : "○";
+  return normalized === "paid" ? "✓" : "○";
 }
 
 function shouldShowPaymentNote(note) {
@@ -119,11 +119,10 @@ export default function PaymentDetailModal({
                         setNotReceivedPayment={setNotReceivedPayment}
                         onConfirm={(paymentId) => handlePaymentAction(paymentId, "confirm")}
                         onRejectNotify={handlePaymentRejectNotify}
-                        onRefund={(paymentId) => handlePaymentAction(paymentId, "refund")}
                         compact={false}
                       />
                       {String(payment.payment_type || "").toLowerCase() === "deposit" &&
-                      ["pending", "unpaid"].includes(paymentStatus) &&
+                      paymentStatus === "unpaid" &&
                       payment.request_id ? (
                         <button
                           className="action-button secondary"

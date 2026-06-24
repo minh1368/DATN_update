@@ -27,17 +27,21 @@ def create_payment(data: PaymentCreate, db: Session = Depends(get_db), user: dic
     if contract.status != "approved":
         raise HTTPException(status_code=400, detail="Contract chưa được duyệt")
 
-    existing = db.query(Payment).filter(Payment.contract_id == data.contract_id).first()
+    existing = db.query(Payment).filter(
+        Payment.request_id == contract.request_id,
+        Payment.payment_type == "remaining",
+    ).first()
 
     if existing:
         raise HTTPException(status_code=400, detail="Đã tồn tại payment")
 
     payment = Payment(
         contract_id=data.contract_id,
+        request_id=contract.request_id,
         amount=contract.total_price,
         total_amount=contract.total_price,
         remaining_amount=contract.total_price,
-        payment_type="rental",
+        payment_type="remaining",
         status="unpaid",
     )
 
@@ -57,43 +61,15 @@ def pay(payment_id: int, db: Session = Depends(get_db), user: dict = Depends(req
 
     if payment.status == "paid":
         raise HTTPException(400, "Đã thanh toán")
-    if payment.status == "refunded":
-        raise HTTPException(400, "Khoản thanh toán đã hoàn tiền")
+    if payment.status == "rejected":
+        raise HTTPException(400, "Khoản thanh toán đã bị từ chối")
 
     payment.status = "paid"
     payment.paid_at = datetime.utcnow()
 
-    if payment.request_id and payment.payment_type == "deposit":
-        rental_request = db.query(RentalRequest).filter(RentalRequest.request_id == payment.request_id).first()
-        if rental_request and rental_request.status == "deposit_pending":
-            rental_request.status = "pending"
-
     db.commit()
 
     return {"message": "Thanh toán thành công"}
-
-
-@router.put("/{payment_id}/refund")
-def refund(payment_id: int, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
-    payment = db.query(Payment).filter(Payment.payment_id == payment_id).first()
-
-    if not payment:
-        raise HTTPException(404, "Payment không tồn tại")
-
-    if payment.payment_type != "deposit":
-        raise HTTPException(400, "Chỉ hoàn tiền cho khoản đặt cọc")
-
-    if payment.status != "refund_pending":
-        raise HTTPException(400, "Khoản đặt cọc chưa ở trạng thái chờ hoàn")
-    if not payment.paid_at:
-        raise HTTPException(400, "Khoản đặt cọc chưa được xác nhận thanh toán")
-
-    payment.status = "refunded"
-    payment.note = "Đã hoàn tiền cọc"
-
-    db.commit()
-
-    return {"message": "Đã hoàn tiền cọc"}
 
 
 @router.put("/{payment_id}/reject")
@@ -108,7 +84,7 @@ def reject_payment(
     if not payment:
         raise HTTPException(404, "Payment không tồn tại")
 
-    if payment.status in ["paid", "refunded"]:
+    if payment.status == "paid":
         raise HTTPException(400, "Khoản này đã được xử lý")
 
     reason = (payload.reason or "").strip() if payload else ""

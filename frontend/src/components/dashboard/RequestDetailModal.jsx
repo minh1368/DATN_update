@@ -25,17 +25,17 @@ export default function RequestDetailModal({
   const requestStatus = String(req.status || "").toLowerCase();
   const depositStatus = String(depositPayment?.status || "").toLowerCase();
   const requestCode = `YC${String(req.request_id).padStart(3, "0")}`;
-  const requestStatusLabel = requestStatus === "completed" ? "Đã duyệt" : formatRequestStatus(req.status);
-  const requestStatusClass = requestStatus === "completed" ? "approved" : requestStatus;
+  const requestStatusLabel = formatRequestStatus(req.status);
+  const requestStatusClass = requestStatus;
   const closeDetail = () => {
     setSelectedRequestDetail(null);
     setRequestRejectReason("");
     setShowRequestRejectNote(false);
   };
   const canConfirmDeposit = Boolean(depositPayment) &&
-    ["deposit_pending", "pending"].includes(requestStatus) &&
-    !["paid", "rejected", "cancelled", "refunded"].includes(depositStatus);
-  const canRejectRequest = !["approved", "rejected", "completed"].includes(requestStatus) && depositStatus !== "paid";
+    requestStatus === "pending" &&
+    !["paid", "rejected"].includes(depositStatus);
+  const canRejectRequest = !["approved", "rejected"].includes(requestStatus) && depositStatus !== "paid";
 
   return (
     <>

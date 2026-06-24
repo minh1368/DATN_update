@@ -75,13 +75,8 @@ function AppFooter() {
 
           <div className="app-footer-company">
             <h2>Công ty Cổ phần TĐ Phương Đông</h2>
-            <p>MST/MSDN: 0110942941 do Sở Tài chính TP Hà Nội cấp ngày 24/02/2025</p>
+            <p>MST/MSDN: 0110942941, cấp ngày 21/01/2025</p>
             <p>Địa chỉ: 39 Phan Phù Tiên, phường Ô Chợ Dừa, Hà Nội, Việt Nam</p>
-          </div>
-
-          <div className="footer-cert-badge">
-            <span className="footer-cert-check">✓</span>
-            <span>ĐÃ THÔNG BÁO<br />BỘ CÔNG THƯƠNG</span>
           </div>
         </div>
 

@@ -10,15 +10,14 @@ class PaymentRejectPayload(BaseModel):
 class PaymentResponse(BaseModel):
     payment_id: int
     contract_id: int | None = None
-    request_id: int | None = None
+    request_id: int
     amount: float
     total_amount: float | None = None
     remaining_amount: float | None = None
-    payment_type: str | None = None
+    payment_type: str
     status: str
     note: str | None = None
     paid_at: datetime | None = None
 
     class Config:
         from_attributes = True
-

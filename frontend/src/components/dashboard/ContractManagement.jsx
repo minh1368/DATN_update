@@ -64,9 +64,6 @@ export default function ContractManagement({
         contract.end_date,
         contract.total_price,
         contract.status,
-        contract.invoice_code,
-        contract.invoice_status,
-        contract.signature_status,
       ].join(" ").toLowerCase();
       if (!searchable.includes(normalizedContractSearch)) return false;
     }
@@ -156,7 +153,7 @@ export default function ContractManagement({
             const car = carById.get(Number(contract.car_id));
             const paymentSummary = getContractPaymentSummary(contract);
             const hasRejectedPayment = paymentSummary.payments.some((payment) => (
-              ["rejected", "cancelled", "refund_pending", "refunded"].includes(String(payment.status || "").toLowerCase())
+              String(payment.status || "").toLowerCase() === "rejected"
             ));
             const canReturnCar = contract.status === "approved" && paymentSummary.remaining <= 0 && !hasRejectedPayment;
             return (

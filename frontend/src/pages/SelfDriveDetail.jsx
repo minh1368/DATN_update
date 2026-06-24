@@ -247,6 +247,25 @@ export default function SelfDriveDetailPage() {
     return customerService.findByEmail(email).catch(() => null);
   };
 
+  const datesOverlap = (leftStart, leftEnd, rightStart, rightEnd) => (
+    leftStart <= rightEnd && leftEnd >= rightStart
+  );
+
+  const isActiveRentalItem = (item) => {
+    const requestStatus = String(item?.status || "").toLowerCase();
+    const contractStatus = String(item?.contract_status || "").toLowerCase();
+    return ["deposit_pending", "pending", "approved"].includes(requestStatus) ||
+      ["pending", "approved"].includes(contractStatus);
+  };
+
+  const customerHasOverlappingRental = async (customerId, startDate, endDate) => {
+    const rentals = await requestService.getCustomerDetails(customerId).catch(() => []);
+    return (Array.isArray(rentals) ? rentals : []).some((item) => (
+      isActiveRentalItem(item) &&
+      datesOverlap(startDate, endDate, item.start_date, item.end_date)
+    ));
+  };
+
   const handleBookClick = () => {
     if (!authStorage.getItem("userData")) {
       setLoginError("");
@@ -263,12 +282,13 @@ export default function SelfDriveDetailPage() {
 
     try {
       const user = await userService.login(loginData);
-      const customer = user.role === "customer" ? await fetchCustomerByEmail(user.username) : null;
+      const userEmail = user.email || user.username;
+      const customer = user.role === "customer" ? await fetchCustomerByEmail(userEmail) : null;
       const userProfile = customer
         ? { ...user, ...customer }
-        : { ...user, email: user.username?.includes("@") ? user.username : "" };
+        : { ...user, email: user.email || (user.username?.includes("@") ? user.username : "") };
 
-      authStorage.setItem("loggedInUser", userProfile.name || user.username);
+      authStorage.setItem("loggedInUser", userProfile.name || user.email || user.username);
       authStorage.setItem("userRole", user.role);
       authStorage.setItem("userData", JSON.stringify(userProfile));
       if (user.token) authStorage.setItem("authToken", user.token);
@@ -296,11 +316,6 @@ export default function SelfDriveDetailPage() {
     }
 
     try {
-      await userService.register({
-        username: registerData.email,
-        password: registerData.password,
-      });
-
       await customerService.createPublic({
         name: registerData.fullName,
         phone: registerData.phone,
@@ -341,18 +356,25 @@ export default function SelfDriveDetailPage() {
     }
 
     try {
-      let customerId = authStorage.getItem('customerId');
-      if (!customerId) {
-        const userData = getStoredUser();
-        const customer = await fetchCustomerByEmail(userData.email || userData.username);
-        if (customer?.customer_id) {
-          customerId = customer.customer_id;
-          authStorage.setItem('customerId', String(customerId));
-        }
+      let customerId = null;
+      const userData = getStoredUser();
+      const customer = await fetchCustomerByEmail(userData.email || userData.username || customerEmail);
+      if (customer?.customer_id) {
+        customerId = customer.customer_id;
+        authStorage.setItem('customerId', String(customerId));
       }
 
       if (!customerId) {
         throw new Error('Tài khoản chưa có thông tin khách hàng. Vui lòng cập nhật thông tin cá nhân trước khi đặt xe.');
+      }
+
+      const hasOverlappingRental = await customerHasOverlappingRental(
+        Number(customerId),
+        bookingData.start_date,
+        bookingData.end_date,
+      );
+      if (hasOverlappingRental) {
+        throw new Error("Bạn đã có lịch thuê xe trong khoảng thời gian này. Vui lòng chọn thời gian khác.");
       }
 
       const rentalRequest = await requestService.createCustomerRequest({

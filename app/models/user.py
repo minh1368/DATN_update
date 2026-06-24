@@ -6,7 +6,7 @@ class User(Base):
 
     user_id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
-    username = Column(String, unique=True, nullable=False)
+    email = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
     reset_otp = Column(String, nullable=True)
     reset_otp_expires_at = Column(DateTime, nullable=True)
