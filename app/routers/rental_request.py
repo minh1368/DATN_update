@@ -106,7 +106,7 @@ def get_request_details_by_customer(customer_id: int, db: Session = Depends(get_
         reject_payment = next(
             (
                 payment
-                for payment in (remaining, deposit)
+                for payment in (deposit, remaining)
                 if payment and payment.status == "rejected" and payment.note
             ),
             None,
@@ -265,6 +265,19 @@ def reject_request(
     if deposit:
         deposit.status = "rejected"
         deposit.note = reject_note
+    else:
+        # Yêu cầu bị từ chối khi chưa có giao dịch đặt cọc (còn pending)
+        # Tạo một bản ghi payment để lưu lý do từ chối
+        rejected_payment = Payment(
+            request_id=req.request_id,
+            amount=0,
+            total_amount=0,
+            remaining_amount=0,
+            payment_type="deposit",
+            status="rejected",
+            note=reject_note,
+        )
+        db.add(rejected_payment)
     db.commit()
     
     return {"message": "Đã từ chối yêu cầu"}

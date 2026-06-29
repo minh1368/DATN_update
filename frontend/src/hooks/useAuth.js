@@ -195,7 +195,6 @@ export default function useAuth({ notify, onLogout, adminMode = false }) {
     authStorage.removeItem("userData");
     authStorage.removeItem("customerId");
     authStorage.removeItem("authToken");
-    localStorage.removeItem("userPassword");
     onLogout?.();
   };
 
@@ -252,8 +251,6 @@ export default function useAuth({ notify, onLogout, adminMode = false }) {
       if (user.token) authStorage.setItem("authToken", user.token);
       if (customer?.customer_id) authStorage.setItem("customerId", String(customer.customer_id));
       else authStorage.removeItem("customerId");
-      localStorage.setItem("userPassword", loginData.password);
-
       setShowLoginForm(false);
       setLoginData({ username: "", password: "" });
       notify("Đăng nhập thành công", "success");

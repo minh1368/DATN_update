@@ -1,9 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
 
-class PaymentCreate(BaseModel):
-    contract_id: int
-
 class PaymentRejectPayload(BaseModel):
     reason: str | None = None
 

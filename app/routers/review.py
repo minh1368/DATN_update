@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.dependencies import get_db
+from app.dependencies import get_authenticated_user, get_db
 from app.models.customer import Customer
 from app.models.review import Review
 from app.schemas.review import ReviewCreate, ReviewResponse
@@ -18,7 +18,14 @@ def get_reviews(
 
 
 @router.post("/", response_model=ReviewResponse)
-def create_review(review_data: ReviewCreate, db: Session = Depends(get_db)):
+def create_review(
+    review_data: ReviewCreate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_authenticated_user),
+):
+    if user["role"] != "customer" or int(user.get("user_id") or 0) != review_data.customer_id:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền gửi đánh giá cho khách hàng này")
+
     message = review_data.message.strip()
     name = review_data.name.strip()
     email = review_data.email.strip().lower() if review_data.email else None

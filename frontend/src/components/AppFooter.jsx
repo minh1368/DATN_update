@@ -96,11 +96,11 @@ function AppFooter() {
 
         <div className="app-footer-contact">
           <h3>Liên hệ</h3>
-          <a className="footer-hotline" href="tel:0566999666">
+          <a className="footer-hotline" href="tel:0979402470">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.7.6 2.5a2 2 0 0 1-.5 2.1L8 9.5a16 16 0 0 0 6.5 6.5l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.6.5 2.5.6a2 2 0 0 1 1.7 2Z" />
             </svg>
-            0566 999 666 / 0979 402 470
+            0979 402 470
           </a>
           <div className="footer-contact-list">
             <div className="footer-mail-row">

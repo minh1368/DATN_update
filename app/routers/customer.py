@@ -4,13 +4,22 @@ from sqlalchemy.exc import IntegrityError
 from typing import List
 from datetime import datetime, timedelta
 
-from app.dependencies import get_db, require_staff_or_admin, require_admin
+from app.dependencies import (
+    get_authenticated_user,
+    get_db,
+    require_admin,
+    require_customer_access,
+    require_staff_or_admin,
+)
 from app.models.customer import Customer
 from app.models.contract import Contract
+from app.models.rental_request import RentalRequest
+from app.models.review import Review
+from app.models.support_chat import SupportConversation
 from app.models.user import User
 from app.schemas.customer import CustomerCreate, CustomerResponse
 from app.schemas.user import UserLogin, PasswordResetRequest, PasswordResetVerify, PasswordResetConfirm
-from app.security import hash_password, verify_password, create_access_token
+from app.security import create_access_token, hash_password, is_password_hash, verify_password
 from app.routers.user import generate_otp, send_reset_otp_email
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
@@ -80,15 +89,26 @@ def get_customers(db: Session = Depends(get_db), user: dict = Depends(require_st
 
 
 @router.get("/by-email/{email}", response_model=CustomerResponse)
-def get_customer_by_email(email: str, db: Session = Depends(get_db)):
-    customer = db.query(Customer).filter(Customer.email == email).first()
+def get_customer_by_email(
+    email: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_authenticated_user),
+):
+    normalized_email = normalize_email(email)
+    customer = db.query(Customer).filter(Customer.email.ilike(normalized_email)).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
+    if user["role"] == "customer" and int(user.get("user_id") or 0) != customer.customer_id:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền truy cập dữ liệu khách hàng này")
     return customer
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)
-def get_customer(customer_id: int, db: Session = Depends(get_db)):
+def get_customer(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_customer_access),
+):
     customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
@@ -100,7 +120,9 @@ def create_customer(customer: CustomerCreate, db: Session = Depends(get_db), use
     data = prepare_customer_data(customer)
     
     raw_password = data.get("password") or ""
-    data["password"] = hash_password(raw_password) if raw_password else ""
+    if len(raw_password) < 6:
+        raise HTTPException(status_code=400, detail="Mật khẩu phải có ít nhất 6 ký tự")
+    data["password"] = hash_password(raw_password)
     
     ensure_unique_customer_email(db, data.get("email"))
     ensure_unique_customer_phone(db, data.get("phone"))
@@ -123,9 +145,16 @@ def create_customer(customer: CustomerCreate, db: Session = Depends(get_db), use
 @router.post("/public", response_model=CustomerResponse)
 def create_customer_public(customer: CustomerCreate, db: Session = Depends(get_db)):
     data = prepare_customer_data(customer)
-    
+
+    if not data.get("email") or "@" not in data["email"]:
+        raise HTTPException(status_code=400, detail="Email không hợp lệ")
+    if not data.get("phone"):
+        raise HTTPException(status_code=400, detail="Số điện thoại không hợp lệ")
+
     raw_password = data.get("password") or ""
-    data["password"] = hash_password(raw_password) if raw_password else ""
+    if len(raw_password) < 6:
+        raise HTTPException(status_code=400, detail="Mật khẩu phải có ít nhất 6 ký tự")
+    data["password"] = hash_password(raw_password)
     
     ensure_unique_customer_email(db, data.get("email"))
     ensure_unique_customer_phone(db, data.get("phone"))
@@ -146,7 +175,12 @@ def create_customer_public(customer: CustomerCreate, db: Session = Depends(get_d
 
 
 @router.put("/{customer_id}/profile", response_model=CustomerResponse)
-def update_customer_profile(customer_id: int, customer_data: CustomerCreate, db: Session = Depends(get_db)):
+def update_customer_profile(
+    customer_id: int,
+    customer_data: CustomerCreate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_customer_access),
+):
     customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
@@ -156,6 +190,8 @@ def update_customer_profile(customer_id: int, customer_data: CustomerCreate, db:
     if data.get("password") is None or data.get("password") == "":
         data.pop("password", None)
     else:
+        if len(data["password"]) < 6:
+            raise HTTPException(status_code=400, detail="Mật khẩu phải có ít nhất 6 ký tự")
         data["password"] = hash_password(data["password"])
         
     ensure_unique_customer_email(db, data.get("email"), customer_id)
@@ -188,6 +224,8 @@ def update_customer(customer_id: int, customer_data: CustomerCreate, db: Session
     if data.get("password") is None or data.get("password") == "":
         data.pop("password", None)
     else:
+        if len(data["password"]) < 6:
+            raise HTTPException(status_code=400, detail="Mật khẩu phải có ít nhất 6 ký tự")
         data["password"] = hash_password(data["password"])
         
     ensure_unique_customer_email(db, data.get("email"), customer_id)
@@ -220,8 +258,19 @@ def delete_customer(customer_id: int, db: Session = Depends(get_db), user: dict 
     if contracts:
         raise HTTPException(status_code=400, detail="Khách hàng có hợp đồng, không thể xóa")
 
-    db.delete(customer)
-    db.commit()
+    if db.query(RentalRequest).filter(RentalRequest.customer_id == customer_id).first():
+        raise HTTPException(status_code=400, detail="Khách hàng có yêu cầu thuê xe, không thể xóa")
+    if db.query(Review).filter(Review.customer_id == customer_id).first():
+        raise HTTPException(status_code=400, detail="Khách hàng có đánh giá, không thể xóa")
+    if db.query(SupportConversation).filter(SupportConversation.customer_id == customer_id).first():
+        raise HTTPException(status_code=400, detail="Khách hàng có hội thoại hỗ trợ, không thể xóa")
+
+    try:
+        db.delete(customer)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Khách hàng có dữ liệu liên quan, không thể xóa")
 
     return {"message": "Xóa thành công"}
 
@@ -236,6 +285,11 @@ def login_customer(credentials: UserLogin, db: Session = Depends(get_db)):
     customer = db.query(Customer).filter(Customer.email.ilike(email)).first()
     if not customer or not verify_password(credentials.password, customer.password):
         raise HTTPException(status_code=401, detail="Tài khoản hoặc mật khẩu sai")
+
+    if not is_password_hash(customer.password):
+        customer.password = hash_password(credentials.password)
+        db.commit()
+        db.refresh(customer)
 
     token = create_access_token({
         "user_id": customer.customer_id,
@@ -276,8 +330,10 @@ def request_customer_password_reset(payload: PasswordResetRequest, db: Session =
 def verify_customer_password_reset(payload: PasswordResetVerify, db: Session = Depends(get_db)):
     email = normalize_email(payload.email)
     customer = db.query(Customer).filter(Customer.email.ilike(email)).first()
-    
-    if not customer or not customer.reset_otp or not customer.reset_otp_expires_at:
+
+    if not customer:
+        raise HTTPException(status_code=404, detail="Email chưa được đăng ký trong hệ thống")
+    if not customer.reset_otp or not customer.reset_otp_expires_at:
         raise HTTPException(status_code=400, detail="Mã OTP không hợp lệ hoặc đã hết hạn.")
         
     if datetime.now() > customer.reset_otp_expires_at:
@@ -296,8 +352,10 @@ def verify_customer_password_reset(payload: PasswordResetVerify, db: Session = D
 def confirm_customer_password_reset(payload: PasswordResetConfirm, db: Session = Depends(get_db)):
     email = normalize_email(payload.email)
     customer = db.query(Customer).filter(Customer.email.ilike(email)).first()
-    
-    if not customer or not customer.reset_otp or not customer.reset_otp_expires_at:
+
+    if not customer:
+        raise HTTPException(status_code=404, detail="Email chưa được đăng ký trong hệ thống")
+    if not customer.reset_otp or not customer.reset_otp_expires_at:
         raise HTTPException(status_code=400, detail="Yêu cầu đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.")
         
     if datetime.now() > customer.reset_otp_expires_at:

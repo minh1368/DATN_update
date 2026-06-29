@@ -7,7 +7,7 @@ import { authStorage } from "../lib/auth.js";
 import { fallbackCars } from "../lib/carData.js";
 import { canonicalizeBrand, carIdFromSlug, carNameFromSlug, getCarImageUrl, selfDriveDetailPath, slugify } from "../lib/carUtils.js";
 import { getReadableErrorMessage, notifyUser } from "../lib/toast.js";
-import { carService, customerService, requestService, userService } from "../services/dashboardService.js";
+import { carService, customerService, requestService } from "../services/dashboardService.js";
 
 const DEPOSIT_RATE = 0.2;
 const MIN_DEPOSIT_AMOUNT = 300000;
@@ -281,21 +281,16 @@ export default function SelfDriveDetailPage() {
     setLoginError("");
 
     try {
-      const user = await userService.login(loginData);
-      const userEmail = user.email || user.username;
-      const customer = user.role === "customer" ? await fetchCustomerByEmail(userEmail) : null;
-      const userProfile = customer
-        ? { ...user, ...customer }
-        : { ...user, email: user.email || (user.username?.includes("@") ? user.username : "") };
+      const customer = await customerService.login(loginData);
+      const userProfile = { ...customer, user_id: customer.customer_id, role: "customer" };
 
-      authStorage.setItem("loggedInUser", userProfile.name || user.email || user.username);
-      authStorage.setItem("userRole", user.role);
+      authStorage.setItem("loggedInUser", userProfile.name || userProfile.email);
+      authStorage.setItem("userRole", "customer");
       authStorage.setItem("userData", JSON.stringify(userProfile));
-      if (user.token) authStorage.setItem("authToken", user.token);
+      if (customer.token) authStorage.setItem("authToken", customer.token);
       if (customer?.customer_id) {
         authStorage.setItem("customerId", String(customer.customer_id));
       }
-      localStorage.setItem("userPassword", loginData.password);
 
       setShowLoginForm(false);
       setLoginData({ username: "", password: "" });

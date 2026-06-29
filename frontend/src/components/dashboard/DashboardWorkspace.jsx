@@ -170,7 +170,6 @@ export default function DashboardWorkspace({
           getContractPaymentSummary={payment.getContractPaymentSummary}
           formatMoneyValue={formatMoneyValue}
           openPaymentDetail={payment.openPaymentDetail}
-          onApproveContract={actions.onApproveContract}
           onReturnCar={actions.onReturnCar}
         />
       );

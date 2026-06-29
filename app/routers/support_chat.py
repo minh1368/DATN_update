@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.dependencies import get_db, require_staff_or_admin
+from app.dependencies import get_db, get_optional_authenticated_user, require_staff_or_admin
 from app.models.support_chat import SupportConversation, SupportMessage
 from app.schemas.support_chat import ConversationCreate, MessageCreate
 
@@ -94,8 +94,26 @@ def _get_conversation(db: Session, conversation_id: int) -> SupportConversation:
     return conversation
 
 
+def _ensure_conversation_access(conversation: SupportConversation, user: dict | None) -> None:
+    if user and user["role"] in {"admin", "staff"}:
+        return
+    if conversation.customer_id is None:
+        return
+    if not user or user["role"] != "customer" or int(user.get("user_id") or 0) != conversation.customer_id:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền truy cập hội thoại này")
+
+
 @router.post("/conversations")
-def create_or_get_conversation(payload: ConversationCreate, db: Session = Depends(get_db)):
+def create_or_get_conversation(
+    payload: ConversationCreate,
+    db: Session = Depends(get_db),
+    user: dict | None = Depends(get_optional_authenticated_user),
+):
+    if payload.customer_id:
+        if not user or (
+            user["role"] == "customer" and int(user.get("user_id") or 0) != payload.customer_id
+        ):
+            raise HTTPException(status_code=403, detail="Bạn không có quyền tạo hội thoại cho khách hàng này")
     email = payload.customer_email.strip().lower() if payload.customer_email else None
     submitted_name = payload.customer_name.strip() if payload.customer_name else ""
     customer_name = submitted_name if payload.customer_id else ANONYMOUS_CUSTOMER_NAME
@@ -150,8 +168,13 @@ def list_conversations(
 
 
 @router.get("/conversations/{conversation_id}")
-def get_conversation(conversation_id: int, db: Session = Depends(get_db)):
+def get_conversation(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    user: dict | None = Depends(get_optional_authenticated_user),
+):
     conversation = _get_conversation(db, conversation_id)
+    _ensure_conversation_access(conversation, user)
     latest = (
         db.query(SupportMessage)
         .filter(SupportMessage.conversation_id == conversation_id)
@@ -162,8 +185,13 @@ def get_conversation(conversation_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/conversations/{conversation_id}/messages")
-def list_messages(conversation_id: int, db: Session = Depends(get_db)):
-    _get_conversation(db, conversation_id)
+def list_messages(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    user: dict | None = Depends(get_optional_authenticated_user),
+):
+    conversation = _get_conversation(db, conversation_id)
+    _ensure_conversation_access(conversation, user)
     messages = (
         db.query(SupportMessage)
         .filter(SupportMessage.conversation_id == conversation_id)
@@ -174,10 +202,19 @@ def list_messages(conversation_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/conversations/{conversation_id}/read/{reader}")
-def mark_conversation_read(conversation_id: int, reader: str, db: Session = Depends(get_db)):
+def mark_conversation_read(
+    conversation_id: int,
+    reader: str,
+    db: Session = Depends(get_db),
+    user: dict | None = Depends(get_optional_authenticated_user),
+):
     if reader not in {"customer", "staff"}:
         raise HTTPException(status_code=400, detail="Invalid reader")
     conversation = _get_conversation(db, conversation_id)
+    if reader == "staff" and (not user or user["role"] not in {"admin", "staff"}):
+        raise HTTPException(status_code=403, detail="Chỉ nhân viên được đánh dấu tin nhắn nhân viên đã đọc")
+    if reader == "customer":
+        _ensure_conversation_access(conversation, user)
     _mark_read(db, conversation, reader)
     latest = (
         db.query(SupportMessage)
@@ -189,8 +226,14 @@ def mark_conversation_read(conversation_id: int, reader: str, db: Session = Depe
 
 
 @router.post("/conversations/{conversation_id}/customer-message")
-def create_customer_message(conversation_id: int, payload: MessageCreate, db: Session = Depends(get_db)):
+def create_customer_message(
+    conversation_id: int,
+    payload: MessageCreate,
+    db: Session = Depends(get_db),
+    user: dict | None = Depends(get_optional_authenticated_user),
+):
     conversation = _get_conversation(db, conversation_id)
+    _ensure_conversation_access(conversation, user)
     text = payload.message.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Message is required")

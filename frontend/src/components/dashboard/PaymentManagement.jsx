@@ -1,15 +1,14 @@
-﻿import { Fragment } from "react";
+import { Fragment } from "react";
 import { PaymentActionIcon } from "../AppIcons.jsx";
 import { canonicalizeBrand, uniqueCanonicalBrands } from "../../lib/carUtils.js";
 import { sortPaymentGroups } from "../../lib/paymentUtils.js";
 import PaymentRowActions from "./PaymentRowActions.jsx";
 
 const formatPaymentCode = (paymentId) => `TT${String(paymentId || "").padStart(3, "0")}`;
-const formatPaymentGroupCode = (group) => (
-  group.contract?.contract_id
-    ? `HD${String(group.contract.contract_id).padStart(3, "0")}`
-    : `YC${String(group.request?.request_id || "-").padStart(3, "0")}`
-);
+const formatPaymentGroupCode = (group) => {
+  const requestId = group.request?.request_id || group.contract?.request_id || group.payments?.[0]?.request_id;
+  return `YC${String(requestId || "-").padStart(3, "0")}`;
+};
 
 export default function PaymentManagement({
   payments,
@@ -83,7 +82,7 @@ export default function PaymentManagement({
       if (
         paymentType === "deposit" &&
         ["approved", "completed"].includes(requestStatus) &&
-          paymentStatus === "unpaid"
+        paymentStatus === "unpaid"
       ) {
         return { ...payment, status: "paid", paid_at: payment.paid_at || new Date().toISOString() };
       }
@@ -91,14 +90,6 @@ export default function PaymentManagement({
     });
     const summary = getPaymentGroupSummary({ ...group, payments: normalizedGroupPayments });
     return { ...group, payments: normalizedGroupPayments, summary };
-  }).filter((group) => {
-    const requestStatus = String(group.request?.status || "").toLowerCase();
-    const hasPaidPayment = group.payments.some((payment) => String(payment.status || "").toLowerCase() === "paid");
-    const hasOnlyPendingDeposit = group.payments.every((payment) => (
-      String(payment.payment_type || "").toLowerCase() === "deposit" &&
-      String(payment.status || "").toLowerCase() === "unpaid"
-    ));
-    return !(requestStatus === "pending" && hasOnlyPendingDeposit && !hasPaidPayment);
   });
 
   const paymentBrandOptions = uniqueCanonicalBrands(
@@ -281,29 +272,29 @@ export default function PaymentManagement({
                           <span>Thao tác</span>
                         </div>
                         {group.payments.map((payment) => (
-                            <div className="payment-expanded-item" key={payment.payment_id}>
-                              <div className="payment-expanded-code">
-                                {formatPaymentCode(payment.payment_id)}
-                              </div>
-                              <div className="payment-expanded-type">
-                                <strong>{formatPaymentType(payment.payment_type)}</strong>
-                              </div>
-                              <div className="payment-expanded-amount">{formatMoneyValue(payment.amount)} VND</div>
-                              <span className={`payment-status-pill ${getPaymentStatusClass(payment.status)}`}>
-                                {formatPaymentStatus(payment.status)}
-                              </span>
-                              <div className="table-icon-actions">
-                                <PaymentRowActions
-                                  payment={payment}
-                                  groupPayments={group.payments}
-                                  notReceivedPayment={notReceivedPayment}
-                                  setNotReceivedPayment={setNotReceivedPayment}
-                                  onConfirm={(paymentId) => handlePaymentAction(paymentId, "confirm")}
-                                  onRejectNotify={handlePaymentRejectNotify}
-                                />
-                              </div>
+                          <div className="payment-expanded-item" key={payment.payment_id}>
+                            <div className="payment-expanded-code">
+                              {formatPaymentCode(payment.payment_id)}
                             </div>
-                          ))}
+                            <div className="payment-expanded-type">
+                              <strong>{formatPaymentType(payment.payment_type)}</strong>
+                            </div>
+                            <div className="payment-expanded-amount">{formatMoneyValue(payment.amount)} VND</div>
+                            <span className={`payment-status-pill ${getPaymentStatusClass(payment.status)}`}>
+                              {formatPaymentStatus(payment.status)}
+                            </span>
+                            <div className="table-icon-actions">
+                              <PaymentRowActions
+                                payment={payment}
+                                groupPayments={group.payments}
+                                notReceivedPayment={notReceivedPayment}
+                                setNotReceivedPayment={setNotReceivedPayment}
+                                onConfirm={(paymentId) => handlePaymentAction(paymentId, "confirm")}
+                                onRejectNotify={handlePaymentRejectNotify}
+                              />
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </td>
                   </tr>

@@ -124,10 +124,6 @@ export default function useDashboardWorkspaceData({
     handleDeleteCustomer: (customerId) => runDashboardDelete(() => customerService.remove(customerId, headers)),
     handleDeleteRequest: (requestId) => runDashboardDelete(() => requestService.remove(requestId, headers)),
     handleDeleteUser: (userId) => runDashboardDelete(() => userService.remove(userId, headers)),
-    onApproveContract: (contractId) => runServiceMutation(
-      () => contractService.approve(contractId, headers),
-      "Không thể duyệt hợp đồng"
-    ),
     onReturnCar: async (contractId) => {
       const success = await runServiceMutation(
         () => contractService.returnCar(contractId, headers),

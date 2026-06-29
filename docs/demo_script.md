@@ -19,6 +19,7 @@
 5. Đăng ký/đăng nhập khách hàng.
 6. Gửi yêu cầu thuê xe với ngày bắt đầu và ngày kết thúc hợp lệ.
 7. Mở trang `Lịch sử thuê` để xem trạng thái yêu cầu.
+8. Thử gửi thêm yêu cầu trùng thời gian để kiểm tra hệ thống chặn một khách thuê hai xe cùng lúc.
 
 ## 3. Demo phía quản trị
 
@@ -36,14 +37,13 @@
 4. Tab `Khách hàng`:
    - thêm/sửa/xóa khách hàng
 5. Tab `Yêu cầu thuê`:
-   - duyệt yêu cầu
+   - xác nhận khoản đặt cọc bằng thao tác duyệt yêu cầu
    - từ chối yêu cầu
-   - tạo hợp đồng từ yêu cầu đã duyệt
-6. Tab `Hợp đồng`:
-   - duyệt hợp đồng
+6. Tab `Thanh toán`:
+   - xác nhận khoản tiền còn lại của yêu cầu đã duyệt
+   - tạo hợp đồng sau khi đã xác nhận đủ tiền
+7. Tab `Hợp đồng`:
    - kiểm tra xe chuyển sang `rented`
-7. Tab `Thanh toán`:
-   - xác nhận thanh toán
    - trả xe sau khi thanh toán
 8. Tab `Người dùng`:
    - thêm/sửa/xóa nhân viên hoặc admin
@@ -65,5 +65,7 @@
 
 1. Tạo yêu cầu thuê có ngày bắt đầu sau ngày kết thúc.
 2. Tạo yêu cầu thuê trùng lịch xe đã có request/contract đang hoạt động.
-3. Xóa xe đang thuê hoặc có hợp đồng liên quan.
-4. Trả xe khi chưa thanh toán.
+3. Tạo yêu cầu thuê xe khác nhưng trùng thời gian của cùng khách hàng.
+4. Truy cập hồ sơ/lịch thuê bằng ID khách hàng khác để kiểm tra API từ chối.
+5. Xóa xe đang thuê hoặc có hợp đồng liên quan.
+6. Tạo hợp đồng khi chưa thanh toán đủ.

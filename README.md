@@ -16,6 +16,7 @@ Hệ thống thông tin quản lý cho thuê xe gồm backend FastAPI, frontend 
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
 Tạo database PostgreSQL:
@@ -103,18 +104,19 @@ Với Gmail, hãy sử dụng App Password hoặc cấu hình SMTP an toàn tư�
 Import danh sách xe mẫu:
 
 ```powershell
-python scripts/import_cars.py
+python -m scripts.import_cars
 ```
 
 Seed dữ liệu nghiệp vụ:
 
 ```powershell
-python scripts/seed_data.py
+python -m scripts.seed_data
 ```
 
 ## Tài khoản demo
 
-Backend tự tạo tài khoản admin mặc định khi khởi động:
+Backend tự tạo tài khoản admin mặc định khi khởi động. Có thể đổi bằng
+`DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD` và `DEFAULT_ADMIN_NAME` trong `.env`:
 
 ```text
 Email: phamcongminh1368@gmail.com
@@ -139,3 +141,5 @@ Nếu không cấu hình API key, chức năng AI Chat sẽ trả thông báo ch
 - Mật khẩu user/customer mới được hash bằng PBKDF2-SHA256.
 - Dữ liệu mật khẩu cũ dạng plain text vẫn đăng nhập được một lần, sau đó tự chuyển sang dạng hash.
 - Phân quyền quản trị dùng JWT Bearer token; frontend không còn gửi quyền qua `X-User-Role`.
+- API hồ sơ và lịch thuê kiểm tra JWT cùng quyền sở hữu của khách hàng.
+- Khi đưa hệ thống lên Internet, bắt buộc đổi `APP_SECRET_KEY` và mật khẩu admin mặc định.

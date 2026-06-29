@@ -165,7 +165,7 @@ export default function HomeContentSections({
             <span className="review-meta-divider" />
             <span className="review-meta-item">
               <HomeSectionIcon type="support" className="review-meta-icon" />
-              Hỗ trợ: 0566 999 666
+              Hỗ trợ: 0979 402 470
             </span>
           </div>
           <form className="contact-form review-form review-form-centered" onSubmit={handleReviewSubmit}>

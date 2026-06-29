@@ -28,6 +28,13 @@ def normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
+def validate_internal_role(role: str) -> str:
+    normalized = (role or "").strip().lower()
+    if normalized not in {"admin", "staff"}:
+        raise HTTPException(status_code=400, detail="Vai trò chỉ được là admin hoặc staff")
+    return normalized
+
+
 def generate_otp() -> str:
     return f"{random.randint(0, 999999):06d}"
 
@@ -106,8 +113,11 @@ def get_users(db: Session = Depends(get_db), user: dict = Depends(require_staff_
 @router.post("/", response_model=UserResponse)
 def create_user(user: UserCreate, db: Session = Depends(get_db), admin: dict = Depends(require_admin)):
     data = user.model_dump()
+    if len(data.get("password") or "") < 6:
+        raise HTTPException(status_code=400, detail="Mật khẩu phải có ít nhất 6 ký tự")
     data["email"] = normalize_email(data["email"])
     data["name"] = (data.get("name") or "").strip() or None
+    data["role"] = validate_internal_role(data.get("role"))
     data["password"] = (
         hash_password(data["password"])
         if data.get("password") and not is_password_hash(data["password"])
@@ -138,12 +148,19 @@ def update_user(user_id: int, user: UserCreate, db: Session = Depends(get_db), a
 
     email = normalize_email(user.email)
     ensure_unique_email_for_update(db, email, user_id)
+    next_role = validate_internal_role(user.role)
+    if existing_user.role == "admin" and next_role != "admin":
+        admin_count = db.query(User).filter(User.role == "admin").count()
+        if admin_count <= 1:
+            raise HTTPException(status_code=400, detail="Không thể hạ quyền quản trị viên cuối cùng")
 
     existing_user.name = (user.name or "").strip() or None
     existing_user.email = email
     if user.password:
+        if len(user.password) < 6:
+            raise HTTPException(status_code=400, detail="Mật khẩu phải có ít nhất 6 ký tự")
         existing_user.password = hash_password(user.password) if not is_password_hash(user.password) else user.password
-    existing_user.role = user.role
+    existing_user.role = next_role
 
     try:
         db.commit()
@@ -161,6 +178,11 @@ def delete_user(user_id: int, db: Session = Depends(get_db), admin: dict = Depen
     if not existing_user:
         raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
 
+    if existing_user.user_id == admin.get("user_id"):
+        raise HTTPException(status_code=400, detail="Không thể tự xóa tài khoản đang đăng nhập")
+    if existing_user.role == "admin" and db.query(User).filter(User.role == "admin").count() <= 1:
+        raise HTTPException(status_code=400, detail="Không thể xóa quản trị viên cuối cùng")
+
     db.delete(existing_user)
     db.commit()
     return {"message": "Xóa thành công"}
@@ -172,6 +194,11 @@ def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email.ilike(email)).first()
     if not user or not verify_password(credentials.password, user.password):
         raise HTTPException(status_code=401, detail="Tài khoản hoặc mật khẩu sai")
+
+    if not is_password_hash(user.password):
+        user.password = hash_password(credentials.password)
+        db.commit()
+        db.refresh(user)
 
     return user_response(user, include_token=True)
 

@@ -225,7 +225,7 @@ def import_cars():
         
         for car_data in cars_data:
             if car_data["license_plate"] in existing_plates:
-                print(f"⚠️  Bỏ qua xe {car_data['name']} - biển số {car_data['license_plate']} đã tồn tại")
+                print(f"Skipped {car_data['name']} - plate {car_data['license_plate']} already exists")
                 skipped_count += 1
                 continue
             
@@ -235,21 +235,22 @@ def import_cars():
             db.commit()
             db.refresh(new_car)
             
-            print(f"✅ Đã thêm xe {new_car.name} (ID: {new_car.car_id})")
+            print(f"Imported {new_car.name} (ID: {new_car.car_id})")
             imported_count += 1
         
-        print(f"\n📊 Kết quả:")
-        print(f"   - Đã import: {imported_count} xe")
-        print(f"   - Bỏ qua: {skipped_count} xe (đã tồn tại)")
-        print(f"   - Tổng cộng: {len(cars_data)} xe")
+        print("\nResult:")
+        print(f"   - Imported: {imported_count} cars")
+        print(f"   - Skipped: {skipped_count} cars")
+        print(f"   - Total: {len(cars_data)} cars")
         
     except Exception as e:
-        print(f"❌ Lỗi khi import xe: {e}")
+        print(f"Car import failed: {e}")
         db.rollback()
+        raise
     finally:
         db.close()
 
 if __name__ == "__main__":
-    print("🚗 Bắt đầu import dữ liệu xe...")
+    print("Starting car import...")
     import_cars()
-    print("✨ Hoàn thành!")
+    print("Completed.")

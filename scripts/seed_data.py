@@ -27,7 +27,6 @@ CUSTOMER_NAMES = [
     "Đỗ Thị F", "Vũ Văn G", "Bùi Thị H", "Ngô Văn I", "Dương Thị K"
 ]
 
-PAYMENT_METHODS = ["cash", "transfer"]
 STATUSES = ["available", "rented"]
 REVIEW_MESSAGES = [
     "Xe sạch, thủ tục nhanh và nhân viên hỗ trợ rất rõ ràng.",
@@ -108,7 +107,6 @@ def seed_requests(db, count=100):
 
 def seed_contracts_and_payments(db):
     approved_requests = db.query(RentalRequest).filter(RentalRequest.status == "approved").all()
-    existing_contracts = db.query(Contract).count()
     for req in approved_requests[:50]:
         if db.query(Contract).filter(Contract.request_id == req.request_id).first():
             continue
@@ -139,13 +137,28 @@ def seed_contracts_and_payments(db):
         if db.query(Payment).filter(Payment.contract_id == contract.contract_id).first():
             continue
 
-        payment = Payment(
+        total_amount = float(contract.total_price or 0)
+        deposit_amount = min(max(round(total_amount * 0.2), 300_000), total_amount)
+        remaining_amount = max(total_amount - deposit_amount, 0)
+        db.add(Payment(
             contract_id=contract.contract_id,
-            amount=contract.total_price,
-            method=random.choice(PAYMENT_METHODS),
-            status="paid"
-        )
-        db.add(payment)
+            request_id=contract.request_id,
+            amount=deposit_amount,
+            total_amount=total_amount,
+            remaining_amount=remaining_amount,
+            payment_type="deposit",
+            status="paid",
+        ))
+        if remaining_amount > 0:
+            db.add(Payment(
+                contract_id=contract.contract_id,
+                request_id=contract.request_id,
+                amount=remaining_amount,
+                total_amount=total_amount,
+                remaining_amount=remaining_amount,
+                payment_type="remaining",
+                status="paid",
+            ))
     db.commit()
 
 

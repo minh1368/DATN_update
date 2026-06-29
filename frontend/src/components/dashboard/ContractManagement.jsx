@@ -31,7 +31,6 @@ export default function ContractManagement({
   getContractPaymentSummary,
   formatMoneyValue,
   openPaymentDetail,
-  onApproveContract,
   onReturnCar,
 }) {
   const visibleContracts = contracts.filter((contract) => (
@@ -173,11 +172,7 @@ export default function ContractManagement({
                     <button className="table-icon-button" type="button" onClick={() => openPaymentDetail({ contract }, false)} title="Xem thanh toán" aria-label="Xem thanh toán">
                       <PaymentActionIcon type="view" />
                     </button>
-                    {contract.status === "pending" ? (
-                      <button className="table-icon-button" onClick={() => onApproveContract(contract.contract_id)} title="Duyệt" aria-label="Duyệt">
-                        <PaymentActionIcon type="check" />
-                      </button>
-                    ) : contract.status === "approved" && canReturnCar ? (
+                    {contract.status === "approved" && canReturnCar ? (
                       <button className="table-icon-button" onClick={() => onReturnCar(contract.contract_id)} title="Trả xe" aria-label="Trả xe">
                         <PaymentActionIcon type="return" />
                       </button>

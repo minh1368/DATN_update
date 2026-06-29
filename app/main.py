@@ -150,6 +150,7 @@ if engine.dialect.name == "postgresql":
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_customers_email_lower ON customers (lower(email)) WHERE email IS NOT NULL AND email <> ''"))
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_lower ON users (lower(email))"))
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_cars_license_plate ON cars (license_plate) WHERE license_plate IS NOT NULL AND license_plate <> ''"))
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_contracts_request_id ON contracts (request_id)"))
         connection.execute(text("ALTER TABLE reviews ALTER COLUMN email SET NOT NULL"))
 
 # ensure default admin exists
@@ -159,12 +160,15 @@ from app.security import hash_password, is_password_hash
 
 
 with SessionLocal() as session:
-    admin_user = session.query(User).filter(User.email == "phamcongminh1368@gmail.com").first()
+    admin_email = os.getenv("DEFAULT_ADMIN_EMAIL", "phamcongminh1368@gmail.com").strip().lower()
+    admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD", "123456")
+    admin_name = os.getenv("DEFAULT_ADMIN_NAME", "Admin").strip() or "Admin"
+    admin_user = session.query(User).filter(User.email == admin_email).first()
     if not admin_user:
-        session.add(User(name="Admin", email="phamcongminh1368@gmail.com", password=hash_password("123456"), role="admin"))
+        session.add(User(name=admin_name, email=admin_email, password=hash_password(admin_password), role="admin"))
         session.commit()
     elif not admin_user.name:
-        admin_user.name = "Admin"
+        admin_user.name = admin_name
         if not is_password_hash(admin_user.password):
             admin_user.password = hash_password(admin_user.password)
         session.commit()
@@ -178,14 +182,29 @@ with SessionLocal() as session:
     if customer_users:
         from app.models.customer import Customer
         for u in customer_users:
-            if u.password and is_password_hash(u.password):
+            if u.password:
                 cust = session.query(Customer).filter(Customer.email.ilike(u.email)).first()
                 if cust:
-                    cust.password = u.password
+                    cust.password = u.password if is_password_hash(u.password) else hash_password(u.password)
         session.commit()
         
         # Delete user records with role="customer"
         session.query(User).filter(User.role == "customer").delete(synchronize_session=False)
+        session.commit()
+
+with SessionLocal() as session:
+    from app.models.customer import Customer
+
+    password_data_changed = False
+    for account in session.query(User).all():
+        if account.password and not is_password_hash(account.password):
+            account.password = hash_password(account.password)
+            password_data_changed = True
+    for customer_account in session.query(Customer).all():
+        if customer_account.password and not is_password_hash(customer_account.password):
+            customer_account.password = hash_password(customer_account.password)
+            password_data_changed = True
+    if password_data_changed:
         session.commit()
 
 @app.get("/")

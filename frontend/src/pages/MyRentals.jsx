@@ -215,7 +215,7 @@ export default function MyRentalsPage() {
   if (selectedRental && String(selectedRental.status || "").toLowerCase() === "rejected") {
     selectedDetails.push([
       "Lý do từ chối",
-      selectedRental.reject_reason ||
+      getRejectReasonFromRental(selectedRental) ||
         "Yêu cầu thuê xe không được duyệt. Vui lòng liên hệ nhân viên để biết thêm chi tiết.",
       true,
     ]);

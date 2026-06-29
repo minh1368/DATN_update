@@ -81,7 +81,7 @@ const baseNewsArticles = [
     content: [
       "Xác định nhu cầu: số người, quãng đường, địa hình và thời gian thuê để chọn sedan, SUV hay MPV phù hợp.",
       "Khi nhận xe, kiểm tra cùng nhân viên: vỏ xe, lốp, nhiên liệu, đồng hồ km, giấy tờ xe và tình trạng nội thất. Chụp ảnh làm bằng chứng.",
-      "Tuân thủ hợp đồng về km, vùng di chuyển và thời gian trả xe. Liên hệ hotline 0566 999 666 khi cần hỗ trợ khẩn.",
+      "Tuân thủ hợp đồng về km, vùng di chuyển và thời gian trả xe. Liên hệ hotline 0979 402 470 khi cần hỗ trợ khẩn.",
     ],
   },
   {
@@ -126,7 +126,7 @@ const baseNewsArticles = [
     content: [
       "Ưu đãi áp dụng cho đặt xe từ thứ Sáu đến Chủ nhật, tối thiểu 2 ngày thuê.",
       "Không cộng dồn với chương trình khác. Số lượng xe ưu đãi có hạn.",
-      "Liên hệ hotline 0566 999 666 hoặc đặt qua website để được xác nhận giá cuối cùng.",
+      "Liên hệ hotline 0979 402 470 hoặc đặt qua website để được xác nhận giá cuối cùng.",
     ],
   },
   {

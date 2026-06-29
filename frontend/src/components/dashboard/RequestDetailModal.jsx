@@ -21,7 +21,9 @@ export default function RequestDetailModal({
   const car = carById.get(Number(req.car_id));
   const depositPayment = depositPaymentByRequestId.get(Number(req.request_id));
   const totalPrice = getRequestTotalPrice(req, car);
-  const depositAmount = Number(depositPayment?.amount || 0);
+  const depositAmount = Number(
+    depositPayment?.amount || Math.min(totalPrice, Math.max(300000, Math.round(totalPrice * 0.2))),
+  );
   const requestStatus = String(req.status || "").toLowerCase();
   const depositStatus = String(depositPayment?.status || "").toLowerCase();
   const requestCode = `YC${String(req.request_id).padStart(3, "0")}`;
@@ -32,9 +34,7 @@ export default function RequestDetailModal({
     setRequestRejectReason("");
     setShowRequestRejectNote(false);
   };
-  const canConfirmDeposit = Boolean(depositPayment) &&
-    requestStatus === "pending" &&
-    !["paid", "rejected"].includes(depositStatus);
+  const canConfirmDeposit = requestStatus === "pending";
   const canRejectRequest = !["approved", "rejected"].includes(requestStatus) && depositStatus !== "paid";
 
   return (
@@ -63,7 +63,7 @@ export default function RequestDetailModal({
             </div>
             <div>
               <span>Tiền cọc:</span>
-              <strong>{depositPayment ? `${formatMoneyValue(depositAmount)} VND` : "-"}</strong>
+              <strong>{formatMoneyValue(depositAmount)} VND</strong>
             </div>
             <div>
               <span>Trạng thái:</span>
@@ -113,8 +113,8 @@ export default function RequestDetailModal({
           <button
             className="action-button"
             type="button"
-            disabled={!canConfirmDeposit || depositStatus === "paid"}
-            onClick={() => handleConfirmRequestDeposit(depositPayment?.payment_id, req.request_id)}
+            disabled={!canConfirmDeposit}
+            onClick={() => handleConfirmRequestDeposit(req.request_id)}
           >
             {requestStatus === "approved" ? "Đã duyệt" : "Duyệt"}
           </button>

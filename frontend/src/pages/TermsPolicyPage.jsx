@@ -76,7 +76,7 @@ function TermsPolicyPage() {
           <article>
             <h2>8. Liên hệ</h2>
             <p>
-              Nếu có câu hỏi về điều khoản sử dụng, vui lòng liên hệ hotline 0566 999 666 hoặc email
+              Nếu có câu hỏi về điều khoản sử dụng, vui lòng liên hệ hotline 0979 402 470 hoặc email
               phuongdongcorp22@gmail.com để được hỗ trợ.
             </p>
           </article>

@@ -111,7 +111,6 @@ export default function ChauffeurDrivePage() {
             <p>Gửi yêu cầu hoặc gọi trực tiếp để được tư vấn dòng xe, tuyến đường và chi phí phù hợp.</p>
           </div>
           <div className="chauffeur-contact-box">
-            <a href="tel:0566999666">0566 999 666</a>
             <a href="tel:0979402470">0979 402 470</a>
             <a href="mailto:phuongdongcorp22@gmail.com">phuongdongcorp22@gmail.com</a>
           </div>

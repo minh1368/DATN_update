@@ -47,7 +47,6 @@ export const requestService = {
 export const contractService = {
   getAll: (headers) => apiJson("/contracts", { headers }),
   createFromRequest: (requestId, headers) => apiJson(`/contracts/${requestId}`, { method: "POST", headers }),
-  approve: (contractId, headers) => apiJson(`/contracts/${contractId}/approve`, { method: "PUT", headers }),
   returnCar: (contractId, headers) => apiJson(`/contracts/${contractId}/return`, { method: "PUT", headers }),
 };
 

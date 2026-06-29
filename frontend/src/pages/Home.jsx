@@ -389,7 +389,6 @@ export default function Home({ adminMode = false, initialAbout = false }) {
     handleDeleteCustomer,
     handleDeleteRequest,
     handleDeleteUser,
-    onApproveContract,
     onReturnCar,
   } = useDashboardWorkspaceData({
     cars,
@@ -647,7 +646,6 @@ export default function Home({ adminMode = false, initialAbout = false }) {
               handleDeleteCustomer,
               handleDeleteRequest,
               handleDeleteUser,
-              onApproveContract,
               onReturnCar,
             }}
             helpers={{

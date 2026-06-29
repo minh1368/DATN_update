@@ -16,9 +16,6 @@ function ProfileUserIcon() {
   );
 }
 
-const PASSWORD_PLACEHOLDER = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
-const getStoredPassword = () => localStorage.getItem("userPassword") || PASSWORD_PLACEHOLDER;
-
 export default function ProfilePage() {
   const navigate = useNavigate();
   const [userData, setUserData] = useState(null);
@@ -34,7 +31,7 @@ export default function ProfilePage() {
     phone: '',
     email: '',
     address: '',
-    password: getStoredPassword()
+    password: ''
   });
 
   const mergeCustomerProfile = useCallback((customer) => {
@@ -43,7 +40,7 @@ export default function ProfilePage() {
       phone: customer.phone || '',
       email: customer.email || '',
       address: customer.address || '',
-      password: getStoredPassword()
+      password: ''
     };
 
     setEditData(profile);
@@ -156,7 +153,7 @@ export default function ProfilePage() {
         phone: normalizedUser.phone || '',
         email: normalizedUser.email || '',
         address: normalizedUser.address || '',
-        password: getStoredPassword()
+        password: ''
       });
       } catch (error) {
         console.error('Error parsing user data:', error);
@@ -252,18 +249,10 @@ export default function ProfilePage() {
 
     try {
       const submitData = { ...editData };
-      const storedPw = getStoredPassword();
-      if (submitData.password === storedPw || submitData.password === PASSWORD_PLACEHOLDER) {
-        submitData.password = '';
-      }
-
       const storedCustomerId = authStorage.getItem('customerId');
       if (!storedCustomerId) {
         const createdCustomer = await customerService.createPublic(submitData);
         mergeCustomerProfile(createdCustomer);
-        if (submitData.password) {
-          localStorage.setItem("userPassword", submitData.password);
-        }
         setEditMode(false);
         setShowProfilePassword(false);
         notifyUser("Cập nhật thông tin thành công!", "success");
@@ -279,14 +268,11 @@ export default function ProfilePage() {
         phone: updatedCustomer.phone || '',
         email: updatedCustomer.email || '',
         address: updatedCustomer.address || '',
-        password: getStoredPassword()
+        password: ''
       });
       const merged = { ...userData, ...updatedCustomer };
       setUserData(merged);
       authStorage.setItem("userData", JSON.stringify(merged));
-      if (submitData.password) {
-        localStorage.setItem("userPassword", submitData.password);
-      }
       setEditMode(false);
       setShowProfilePassword(false);
       notifyUser("Cập nhật thông tin thành công!", "success");
@@ -310,7 +296,7 @@ export default function ProfilePage() {
         phone: userData.phone || "",
         email: userData.email || "",
         address: userData.address || "",
-        password: getStoredPassword(),
+        password: '',
       });
     }
   };

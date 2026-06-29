@@ -52,7 +52,7 @@ def summary(db: Session = Depends(get_db), user: dict = Depends(require_staff_or
 
 @router.get("/export-csv")
 def export_csv(db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
-    payments = db.query(Payment).all()
+    payments = db.query(Payment).filter(Payment.status == "paid").all()
     headers = ["payment_id", "contract_id", "request_id", "payment_type", "amount", "total_amount", "remaining_amount", "status"]
 
     output = io.StringIO()
@@ -79,7 +79,7 @@ def export_csv(db: Session = Depends(get_db), user: dict = Depends(require_staff
 
 @router.get("/export-excel")
 def export_excel(db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
-    payments = db.query(Payment).all()
+    payments = db.query(Payment).filter(Payment.status == "paid").all()
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Payments"

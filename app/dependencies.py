@@ -11,7 +11,7 @@ def get_db():
         db.close()
 
 
-def get_current_user(authorization: str | None = Header(None, alias="Authorization")):
+def get_authenticated_user(authorization: str | None = Header(None, alias="Authorization")):
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -26,7 +26,7 @@ def get_current_user(authorization: str | None = Header(None, alias="Authorizati
         )
 
     role = payload.get("role")
-    if role not in ("admin", "staff"):
+    if role not in ("admin", "staff", "customer"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid user role"
@@ -37,6 +37,30 @@ def get_current_user(authorization: str | None = Header(None, alias="Authorizati
         "user_id": payload.get("user_id"),
         "email": payload.get("email") or payload.get("username"),
     }
+
+
+def get_optional_authenticated_user(authorization: str | None = Header(None, alias="Authorization")):
+    if not authorization:
+        return None
+    return get_authenticated_user(authorization)
+
+
+def get_current_user(user: dict = Depends(get_authenticated_user)):
+    if user["role"] not in ("admin", "staff"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Staff access required"
+        )
+    return user
+
+
+def require_customer_access(customer_id: int, user: dict = Depends(get_authenticated_user)):
+    if user["role"] == "customer" and int(user.get("user_id") or 0) != customer_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn không có quyền truy cập dữ liệu khách hàng này"
+        )
+    return user
 
 
 def require_admin(user: dict = Depends(get_current_user)):

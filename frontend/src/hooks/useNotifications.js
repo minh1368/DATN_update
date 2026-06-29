@@ -206,21 +206,26 @@ export default function useNotifications({
         const contractCompleteEvents = [];
         const existingContractCompleteEventIds = [];
         rentalDetails.forEach((item) => {
-          ["deposit", "remaining"].forEach((paymentType) => {
-            const paymentInfo = item.payments?.[paymentType];
-            if (!paymentInfo || String(paymentInfo.status || "").toLowerCase() !== "rejected") return;
-            const note = String(paymentInfo.note || "").trim();
-            if (!note) return;
-            const eventId = `${item.request_id}:${paymentType}:${paymentInfo.payment_id || note}`;
-            existingPaymentEventIds.push(eventId);
-            if (!paymentSeen.has(eventId)) {
-              paymentEvents.push({
-                eventId,
-                requestId: item.request_id,
-                note,
-              });
-            }
-          });
+          // Chỉ gửi thông báo payment nếu request chưa bị từ chối ở bước duyệt
+          // (nếu request.status === "rejected" thì đã có thông báo riêng, không cần thêm thông báo payment)
+          const isRequestRejected = String(item.status || "").toLowerCase() === "rejected";
+          if (!isRequestRejected) {
+            ["deposit", "remaining"].forEach((paymentType) => {
+              const paymentInfo = item.payments?.[paymentType];
+              if (!paymentInfo || String(paymentInfo.status || "").toLowerCase() !== "rejected") return;
+              const note = String(paymentInfo.note || "").trim();
+              if (!note) return;
+              const eventId = `${item.request_id}:${paymentType}:${paymentInfo.payment_id || note}`;
+              existingPaymentEventIds.push(eventId);
+              if (!paymentSeen.has(eventId)) {
+                paymentEvents.push({
+                  eventId,
+                  requestId: item.request_id,
+                  note,
+                });
+              }
+            });
+          }
 
           const contractStatus = String(item.contract_status || "").toLowerCase();
           if (contractStatus === "completed" && item.request_id) {

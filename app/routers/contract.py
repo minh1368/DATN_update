@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.dependencies import get_db, require_staff_or_admin
+from app.dependencies import get_db, require_customer_access, require_staff_or_admin
 from app.models.contract import Contract
 from app.models.payment import Payment
 from app.models.rental_request import RentalRequest
@@ -20,7 +20,11 @@ def get_contracts(db: Session = Depends(get_db), user: dict = Depends(require_st
 
 # GET contracts by customer
 @router.get("/customer/{customer_id}", response_model=List[ContractResponse])
-def get_contracts_by_customer(customer_id: int, db: Session = Depends(get_db)):
+def get_contracts_by_customer(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_customer_access),
+):
     return db.query(Contract).filter(Contract.customer_id == customer_id).all()
 
 # GET contract detail
@@ -41,6 +45,9 @@ def create_contract(request_id: int, db: Session = Depends(get_db), user: dict =
 
     if req.status != "approved":
         raise HTTPException(status_code=400, detail="Yêu cầu chưa được duyệt")
+
+    if db.query(Contract).filter(Contract.request_id == request_id).first():
+        raise HTTPException(status_code=400, detail="Yêu cầu đã có hợp đồng")
 
     car = db.query(Car).filter(Car.car_id == req.car_id).first()
 
@@ -97,77 +104,6 @@ def create_contract(request_id: int, db: Session = Depends(get_db), user: dict =
     db.refresh(contract)
 
     return contract
-
-# APPROVE contract
-@router.put("/{contract_id}/approve", response_model=ContractResponse)
-def approve_contract(contract_id: int, db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
-    contract = db.query(Contract).filter(Contract.contract_id == contract_id).first()
-    if not contract:
-        raise HTTPException(status_code=404, detail="Contract không tồn tại")
-
-    if contract.status != "pending":
-        raise HTTPException(status_code=400, detail="Contract đã được xử lý")
-
-    car = db.query(Car).filter(Car.car_id == contract.car_id).first()
-    if not car:
-        raise HTTPException(status_code=404, detail="Xe không tồn tại")
-
-    if car.status != "available":
-        raise HTTPException(status_code=400, detail="Xe hiện không khả dụng")
-
-    if has_overlapping_booking(
-        db,
-        contract.car_id,
-        contract.start_date,
-        contract.end_date,
-        exclude_request_id=contract.request_id,
-        exclude_contract_id=contract.contract_id,
-    ):
-        raise HTTPException(status_code=400, detail="Xe đã có lịch thuê trong khoảng thời gian này")
-
-    if has_overlapping_customer_booking(
-        db,
-        contract.customer_id,
-        contract.start_date,
-        contract.end_date,
-        exclude_request_id=contract.request_id,
-        exclude_contract_id=contract.contract_id,
-    ):
-        raise HTTPException(status_code=400, detail="Khách hàng đã có lịch thuê xe trong khoảng thời gian này")
-
-    contract.status = "approved"
-    car.status = "rented"
-
-    paid_deposit_amount = sum(
-        float(payment.amount or 0)
-        for payment in db.query(Payment).filter(
-            Payment.request_id == contract.request_id,
-            Payment.payment_type == "deposit",
-            Payment.status == "paid",
-        ).all()
-    )
-    remaining_amount = max(float(contract.total_price or 0) - paid_deposit_amount, 0)
-    existing_payment = db.query(Payment).filter(
-        Payment.request_id == contract.request_id,
-        Payment.payment_type == "remaining",
-    ).first()
-    if remaining_amount > 0 and (not existing_payment or existing_payment.status != "paid"):
-        raise HTTPException(status_code=400, detail="Chưa thanh toán đủ tiền thuê")
-    if existing_payment:
-        existing_payment.contract_id = contract.contract_id
-        existing_payment.request_id = contract.request_id
-        existing_payment.amount = remaining_amount
-        existing_payment.total_amount = contract.total_price
-        existing_payment.remaining_amount = remaining_amount
-        existing_payment.payment_type = "remaining"
-        if remaining_amount == 0:
-            existing_payment.status = "paid"
-
-    db.commit()
-    db.refresh(contract)
-
-    return contract
-
 
 # Trả xe
 @router.put("/{contract_id}/return")

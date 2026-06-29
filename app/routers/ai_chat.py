@@ -61,7 +61,7 @@ def _build_website_context(db: Session) -> str:
     lines = [
         "Công ty: Công ty Cổ phần TĐ Phương Đông.",
         "Dịch vụ chính: thuê xe tự lái, thuê xe có lái, thuê xe ngắn hạn, dài hạn và cho doanh nghiệp.",
-        "Hotline: 0566 999 666 / 0979 402 470.",
+        "Hotline: 0979 402 470.",
         "Email: phuongdongcorp22@gmail.com.",
         "Địa chỉ: 39 Phan Phù Tiên, phường Ô Chợ Dừa, Hà Nội.",
         f"Tổng số xe đang hiển thị: {total_cars}; còn xe: {available_cars}; đang thuê: {rented_cars}.",

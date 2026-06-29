@@ -31,7 +31,7 @@ export default function useRequests({
     }
   };
 
-  const handleConfirmRequestDeposit = async (_paymentId, requestId) => {
+  const handleConfirmRequestDeposit = async (requestId) => {
     if (!requestId) return;
 
     try {

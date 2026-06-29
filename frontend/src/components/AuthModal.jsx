@@ -32,9 +32,13 @@ export default function AuthModal({
   setShowRegisterPassword,
 }) {
   const [showOtp, setShowOtp] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
 
   useEffect(() => {
     setShowOtp(false);
+    setShowResetPassword(false);
+    setShowResetConfirmPassword(false);
   }, [authMode, show]);
 
   if (!show) return null;
@@ -199,24 +203,40 @@ export default function AuthModal({
                   Mật khẩu mới
                   <div className="password-input-wrapper">
                     <input
-                      type="password"
+                      type={showResetPassword ? "text" : "password"}
                       placeholder="Nhập mật khẩu mới"
                       value={resetPassword}
                       onChange={(e) => setResetPassword(e.target.value)}
                       required
                     />
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      onClick={() => setShowResetPassword((prev) => !prev)}
+                      aria-label={showResetPassword ? "Ẩn mật khẩu mới" : "Hiện mật khẩu mới"}
+                    >
+                      <PasswordVisibilityIcon visible={showResetPassword} />
+                    </button>
                   </div>
                 </label>
                 <label className="password-field">
                   Xác nhận mật khẩu
                   <div className="password-input-wrapper">
                     <input
-                      type="password"
+                      type={showResetConfirmPassword ? "text" : "password"}
                       placeholder="Nhập lại mật khẩu mới"
                       value={resetConfirmPassword}
                       onChange={(e) => setResetConfirmPassword(e.target.value)}
                       required
                     />
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      onClick={() => setShowResetConfirmPassword((prev) => !prev)}
+                      aria-label={showResetConfirmPassword ? "Ẩn xác nhận mật khẩu" : "Hiện xác nhận mật khẩu"}
+                    >
+                      <PasswordVisibilityIcon visible={showResetConfirmPassword} />
+                    </button>
                   </div>
                 </label>
                 <button type="submit" className="cta-button auth-submit">Đặt lại mật khẩu</button>
