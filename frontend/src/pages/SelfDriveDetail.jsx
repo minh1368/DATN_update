@@ -200,15 +200,36 @@ export default function SelfDriveDetailPage() {
   }, [carId, carNameSlug, displayCars]);
 
   useEffect(() => {
-    if (!showDepositTransfer) return undefined;
+    if (!showDepositTransfer || !depositTransferData) return undefined;
+
+    const expiresAt = Date.now() + 15 * 60 * 1000;
+    const requestId = depositTransferData.requestId;
+    let hasExpired = false;
+
+    const updateCountdown = () => {
+      const secondsLeft = Math.max(Math.ceil((expiresAt - Date.now()) / 1000), 0);
+      setDepositCountdown(secondsLeft);
+
+      if (secondsLeft > 0 || hasExpired) return;
+
+      hasExpired = true;
+      setShowDepositTransfer(false);
+      setDepositTransferData(null);
+      notifyUser("Đã hết thời gian yêu cầu, vui lòng đặt lại.", "success");
+
+      if (requestId) {
+        requestService.expire(requestId).catch(() => {
+          // Popup vẫn phải đóng đúng hạn ngay cả khi máy chủ tạm thời không phản hồi.
+        });
+      }
+    };
 
     setDepositCountdown(15 * 60);
-    const timer = window.setInterval(() => {
-      setDepositCountdown((current) => Math.max(current - 1, 0));
-    }, 1000);
+    const timer = window.setInterval(updateCountdown, 1000);
+    updateCountdown();
 
     return () => window.clearInterval(timer);
-  }, [showDepositTransfer, depositTransferData?.bookingCode]);
+  }, [showDepositTransfer, depositTransferData]);
 
   const title = car?.name || "Chi tiết xe";
   const brand = canonicalizeBrand(car?.brand) || "-";

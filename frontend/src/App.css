@@ -7,3 +7,21 @@
 @import "./styles/user.css";
 @import "./styles/profile.css";
 @import "./styles/news.css";
+
+.app-toast,
+.app-toast.success,
+.app-toast.error,
+.app-toast.info {
+  background: var(--accent-color);
+  color: #000;
+}
+
+.dropdown-arrow {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid currentColor;
+  flex-shrink: 0;
+}

@@ -183,7 +183,7 @@ export default function RequestManagement({
           })}
           {pagedRequests.length === 0 ? (
             <tr>
-              <td colSpan="7">Không có yêu cầu nào trong khoảng ngày đã chọn.</td>
+              <td colSpan="7">Không có yêu cầu nào trong khoảng ngày đã chọn</td>
             </tr>
           ) : null}
         </tbody>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authStorage, normalizeRoleValue } from "../lib/auth.js";
+import { notifyUser } from "../lib/toast.js";
 import useNotifications from "../hooks/useNotifications.js";
 
 function HeaderUserIcon() {
@@ -105,6 +106,7 @@ export default function PageHeader() {
     ].forEach((key) => authStorage.removeItem(key));
     setShowUserMenu(false);
     navigate("/");
+    notifyUser("Đã đăng xuất", "success");
   };
 
   const handleSelectRentalType = (type) => {
@@ -188,7 +190,7 @@ export default function PageHeader() {
                     </div>
                     <div className="notification-list">
                       {notifications.length === 0 ? (
-                        <div className="notification-empty">Chưa có thông báo mới.</div>
+                        <div className="notification-empty">Chưa có thông báo mới</div>
                       ) : (
                         notifications.map((notification) => {
                           const isUnread = !notification.read;
@@ -223,7 +225,7 @@ export default function PageHeader() {
                   <HeaderUserIcon />
                 </span>
                 <span className="user-name">{loggedInUser}</span>
-                <span className="dropdown-arrow">▼</span>
+                <span className="dropdown-arrow" aria-hidden="true" />
               </button>
 
               {showUserMenu ? (

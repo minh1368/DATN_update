@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
 
+from sqlalchemy import or_
 from app.dependencies import get_db, require_admin, require_staff_or_admin
 from app.models.payment import Payment
 from app.models.rental_request import RentalRequest
@@ -13,7 +14,20 @@ router = APIRouter(prefix="/payments", tags=["Payments"])
 
 @router.get("/", response_model=List[PaymentResponse])
 def get_payments(db: Session = Depends(get_db), user: dict = Depends(require_staff_or_admin)):
-    return db.query(Payment).all()
+    reviewed_rejected_request_ids = db.query(Payment.request_id).filter(
+        Payment.status == "rejected",
+        Payment.note.isnot(None),
+        ~Payment.note.like("Lý do từ chối:%"),
+    )
+    return (
+        db.query(Payment)
+        .join(RentalRequest, RentalRequest.request_id == Payment.request_id)
+        .filter(or_(
+            RentalRequest.status == "approved",
+            RentalRequest.request_id.in_(reviewed_rejected_request_ids),
+        ))
+        .all()
+    )
 
 
 @router.put("/{payment_id}/pay")

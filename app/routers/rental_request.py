@@ -2,9 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import datetime
-
-from app.dependencies import get_db, require_admin, require_staff_or_admin
+from app.dependencies import get_authenticated_user, get_db, require_admin, require_staff_or_admin
 from app.models.rental_request import RentalRequest
 from app.models.car import Car
 from app.models.payment import Payment
@@ -215,14 +213,39 @@ def approve_request(request_id: int, db: Session = Depends(get_db), user: dict =
         Payment.request_id == req.request_id,
         Payment.payment_type == "deposit",
     ).first()
-    if deposit:
-        deposit.status = "paid"
-        deposit.paid_at = datetime.utcnow()
     req.status = "approved"
     create_remaining_payment(db, req, deposit)
     db.commit()
     
     return {"message": "Đã duyệt yêu cầu"}
+
+@router.put("/{request_id}/expire")
+def expire_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_authenticated_user),
+):
+    req = db.query(RentalRequest).filter(RentalRequest.request_id == request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Không tìm thấy yêu cầu")
+
+    if user["role"] == "customer" and int(user.get("user_id") or 0) != req.customer_id:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền cập nhật yêu cầu này")
+
+    deposit = db.query(Payment).filter(
+        Payment.request_id == request_id,
+        Payment.payment_type == "deposit",
+    ).first()
+    if req.status != "pending" or not deposit or deposit.status != "unpaid":
+        raise HTTPException(status_code=400, detail="Yêu cầu không còn chờ thanh toán")
+
+    req.status = "rejected"
+    deposit.status = "rejected"
+    deposit.note = "Lý do từ chối: Đã hết thời gian thanh toán"
+    db.commit()
+
+    return {"message": "Yêu cầu đã hết thời gian thanh toán"}
+
 
 # DELETE request
 @router.delete("/{request_id}")

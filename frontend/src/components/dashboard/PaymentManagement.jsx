@@ -48,8 +48,21 @@ export default function PaymentManagement({
   setNotReceivedPayment,
 }) {
   const paymentGroupsMap = new Map();
+  const reviewedRejectedRequestIds = new Set(
+    payments
+      .filter((payment) => (
+        String(payment.status || "").toLowerCase() === "rejected" &&
+        !String(payment.note || "").trim().toLowerCase().startsWith("lý do từ chối:")
+      ))
+      .map((payment) => Number(payment.request_id)),
+  );
+
   payments.forEach((payment) => {
     const context = getPaymentContext(payment);
+    const requestStatus = String(context.request?.status || "").toLowerCase();
+    const wasReviewedInPayments = reviewedRejectedRequestIds.has(Number(payment.request_id));
+    if (context.request && requestStatus !== "approved" && !wasReviewedInPayments) return;
+
     const key = getPaymentGroupKey({ ...context, payment });
     const existing = paymentGroupsMap.get(key) || {
       key,
@@ -75,21 +88,8 @@ export default function PaymentManagement({
       if (left !== right) return left - right;
       return Number(a.payment_id || 0) - Number(b.payment_id || 0);
     });
-    const requestStatus = String(group.request?.status || "").toLowerCase();
-    const normalizedGroupPayments = sortedGroupPayments.map((payment) => {
-      const paymentType = String(payment.payment_type || "").toLowerCase();
-      const paymentStatus = String(payment.status || "").toLowerCase();
-      if (
-        paymentType === "deposit" &&
-        ["approved", "completed"].includes(requestStatus) &&
-        paymentStatus === "unpaid"
-      ) {
-        return { ...payment, status: "paid", paid_at: payment.paid_at || new Date().toISOString() };
-      }
-      return payment;
-    });
-    const summary = getPaymentGroupSummary({ ...group, payments: normalizedGroupPayments });
-    return { ...group, payments: normalizedGroupPayments, summary };
+    const summary = getPaymentGroupSummary({ ...group, payments: sortedGroupPayments });
+    return { ...group, payments: sortedGroupPayments, summary };
   });
 
   const paymentBrandOptions = uniqueCanonicalBrands(

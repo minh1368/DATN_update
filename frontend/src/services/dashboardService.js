@@ -39,6 +39,7 @@ export const requestService = {
   getByCustomer: (customerId) => apiJson(`/rental_requests/customer/${customerId}`),
   getCustomerDetails: (customerId) => apiJson(`/rental_requests/customer-details/${customerId}`),
   createCustomerRequest: (data) => apiJson("/rental_requests/customer", { method: "POST", body: data }),
+  expire: (requestId) => apiJson(`/rental_requests/${requestId}/expire`, { method: "PUT" }),
   approve: (requestId, headers) => apiJson(`/rental_requests/${requestId}/approve`, { method: "PUT", headers }),
   reject: (requestId, data, headers) => apiJson(`/rental_requests/${requestId}/reject`, { method: "PUT", headers, body: data }),
   remove: (requestId, headers) => apiJson(`/rental_requests/${requestId}`, { method: "DELETE", headers }),

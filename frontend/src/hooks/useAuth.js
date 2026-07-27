@@ -196,6 +196,7 @@ export default function useAuth({ notify, onLogout, adminMode = false }) {
     authStorage.removeItem("customerId");
     authStorage.removeItem("authToken");
     onLogout?.();
+    notify("Đã đăng xuất.", "success");
   };
 
   const handleLoginSubmit = async (event) => {

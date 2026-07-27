@@ -219,7 +219,7 @@ export default function AppHeader({
                     <HeaderUserIcon />
                   </span>
                   <span className="user-name">{loggedInUser}</span>
-                  <span className="dropdown-arrow">▼</span>
+                  <span className="dropdown-arrow" aria-hidden="true" />
                 </button>
 
                 {showUserMenu && (
